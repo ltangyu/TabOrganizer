@@ -50,7 +50,7 @@ async function clearStaleOrganizeFlag(): Promise<void> {
   }
 }
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   const cats = await listCategories();
   if (cats.length === 0) {
     // 內建一個「收件匣」分類，name 用繁中作為 fallback，但實際顯示走 builtinKey i18n
@@ -59,6 +59,11 @@ chrome.runtime.onInstalled.addListener(async () => {
   await clearStaleOrganizeFlag();
   const settings = await getSettings();
   await ensureAlarmConfigured(settings.revalidateIntervalMinutes);
+
+  // 首次安裝：自動開啟管理頁（提升首次使用體驗）
+  if (details.reason === 'install') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('src/manager/manager.html') });
+  }
 });
 
 chrome.runtime.onStartup.addListener(async () => {
