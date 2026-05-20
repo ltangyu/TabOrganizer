@@ -2,6 +2,13 @@
 
 All notable changes to TabOrganizer.
 
+## [0.1.1] — 2026-05-20
+
+### Changed
+- 更換 toolbar / Web Store icon 為 Heroicons `rectangle-stack`（黑底白線堆疊矩形，更貼合「歸檔分頁」主題）
+- 新增 `scripts/svg-to-icon-pngs.mjs`：把任意 24×24 viewBox 的 outline SVG 轉成 4 個尺寸 PNG（16/32/48/128）
+- 加入 sharp 為 devDependency 供 icon 生成使用
+
 ## [0.1.0] — 2026-05-20
 
 ### Added

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>TabOrganizer · Icon Candidates</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #fafafa;
+      font-family: 'Inter', 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+      color: #000;
+      font-size: 13px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mono {
+      font-family: 'Space Grotesk', 'JetBrains Mono', 'Consolas', monospace;
+    }
+    header {
+      padding: 32px 40px 20px;
+      border-bottom: 0.5px solid rgba(0,0,0,0.1);
+      background: white;
+    }
+    h1 {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0;
+      letter-spacing: 0.01em;
+    }
+    .sub {
+      font-size: 11px;
+      color: #6b6b6b;
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      padding: 24px 40px 60px;
+    }
+    .card {
+      background: white;
+      border: 0.5px solid rgba(0,0,0,0.1);
+      border-radius: 10px;
+      overflow: hidden;
+      transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .card:hover {
+      border-color: rgba(0,0,0,0.2);
+      transform: translateY(-1px);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .num {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      font-family: 'Space Grotesk', monospace;
+      font-size: 9px;
+      font-weight: 600;
+      color: rgba(0,0,0,0.4);
+      letter-spacing: 0.08em;
+    }
+    .preview-row {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      padding: 24px 16px;
+      background: #f8f9fa;
+      border-bottom: 0.5px solid rgba(0,0,0,0.05);
+      min-height: 168px;
+    }
+    .preview-row.dark {
+      background: #1c1c1f;
+    }
+    .icon-cell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .icon-frame {
+      background: #000;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .icon-frame img {
+      filter: invert(1);
+    }
+    .icon-frame.size-16 { width: 16px; height: 16px; }
+    .icon-frame.size-32 { width: 32px; height: 32px; border-radius: 6px; }
+    .icon-frame.size-48 { width: 48px; height: 48px; border-radius: 8px; }
+    .icon-frame.size-128 { width: 128px; height: 128px; border-radius: 18px; }
+    .icon-frame.size-16 img { width: 12px; height: 12px; }
+    .icon-frame.size-32 img { width: 22px; height: 22px; }
+    .icon-frame.size-48 img { width: 32px; height: 32px; }
+    .icon-frame.size-128 img { width: 86px; height: 86px; }
+    .size-label {
+      font-family: 'Space Grotesk', monospace;
+      font-size: 9px;
+      color: #9c9c9c;
+      letter-spacing: 0.05em;
+    }
+    .meta {
+      padding: 12px 16px;
+    }
+    .name {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+    .desc {
+      font-size: 11px;
+      color: #6b6b6b;
+      margin-top: 2px;
+      line-height: 1.4;
+    }
+    .source {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      font-family: 'Space Grotesk', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #9c9c9c;
+    }
+    .source .lib {
+      color: #000;
+    }
+    .source .lic {
+      padding: 0 5px;
+      border-radius: 3px;
+      background: #f1f3f5;
+      color: #6b6b6b;
+    }
+    .legend {
+      padding: 16px 40px;
+      font-size: 11px;
+      color: #6b6b6b;
+      background: white;
+      border-top: 0.5px solid rgba(0,0,0,0.05);
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .legend span { display: inline-flex; align-items: center; gap: 4px; }
+    .legend .dot { width: 6px; height: 6px; border-radius: 50%; background: #000; display: inline-block; }
+    .pill {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: #f1f3f5;
+      font-family: 'Space Grotesk', monospace;
+      font-size: 9px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #6b6b6b;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>TabOrganizer · Icon Candidates</h1>
+    <div class="sub">
+      20 個開源 icon 候選，全部適用「分頁整理器」主題。
+      每張卡片預覽 4 個尺寸（16 / 32 / 48 / 128 px），對應 Chrome MV3 要求的 manifest icon sizes。
+      看中哪一個就告訴我編號（例：「我要 #7」）。
+    </div>
+    <div class="legend">
+      <span><span class="pill">LU</span> Lucide · ISC</span>
+      <span><span class="pill">HE</span> Heroicons · MIT</span>
+      <span><span class="pill">PH</span> Phosphor · MIT</span>
+      <span><span class="pill">TA</span> Tabler · MIT</span>
+      <span><span class="pill">MA</span> Material Symbols · Apache 2.0</span>
+    </div>
+  </header>
+
+  <div class="grid" id="grid"></div>
+
+  <script>
+    // 20 個 icon 候選 — 全部用 jsdelivr CDN 拉 SVG
+    const ICONS = [
+      // === Lucide (ISC) ===
+      { n: 1,  name: 'layers',         desc: '三層方框疊：分類與層級的視覺隱喻',           lib: 'Lucide',     lic: 'ISC',      url: 'https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/layers.svg' },
+      { n: 2,  name: 'layout-grid',    desc: '4-cell 方格：呼應管理頁的縮圖網格',          lib: 'Lucide',     lic: 'ISC',      url: 'https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/layout-grid.svg' },
+      { n: 3,  name: 'folder-tree',    desc: '資料夾樹：分類階層感',                       lib: 'Lucide',     lic: 'ISC',      url: 'https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/folder-tree.svg' },
+      { n: 4,  name: 'archive',        desc: '歸檔箱：直接對應截圖歸檔功能',                lib: 'Lucide',     lic: 'ISC',      url: 'https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/archive.svg' },
+      { n: 5,  name: 'inbox',          desc: '收件匣：呼應內建分類名稱',                   lib: 'Lucide',     lic: 'ISC',      url: 'https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/inbox.svg' },
+      { n: 6,  name: 'panels-top-left',desc: '面板分割：tab/視窗管理的視覺',                lib: 'Lucide',     lic: 'ISC',      url: 'https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/panels-top-left.svg' },
+      { n: 7,  name: 'square-stack',   desc: '方塊堆疊：多分頁集合',                        lib: 'Lucide',     lic: 'ISC',      url: 'https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/square-stack.svg' },
+      { n: 8,  name: 'library',        desc: '書架：歸檔保存的隱喻',                       lib: 'Lucide',     lic: 'ISC',      url: 'https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/library.svg' },
+      { n: 9,  name: 'bookmark',       desc: '書籤：保留 URL 概念',                        lib: 'Lucide',     lic: 'ISC',      url: 'https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/bookmark.svg' },
+      { n: 10, name: 'box',            desc: '紙箱：簡潔的歸檔意象',                       lib: 'Lucide',     lic: 'ISC',      url: 'https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/box.svg' },
+
+      // === Heroicons (MIT) ===
+      { n: 11, name: 'squares-2x2',    desc: '2×2 方格：簡潔網格佈局',                      lib: 'Heroicons',  lic: 'MIT',      url: 'https://cdn.jsdelivr.net/npm/heroicons@2.1.5/24/outline/squares-2x2.svg' },
+      { n: 12, name: 'archive-box',    desc: '帶蓋歸檔箱：明確「歸檔」語意',                lib: 'Heroicons',  lic: 'MIT',      url: 'https://cdn.jsdelivr.net/npm/heroicons@2.1.5/24/outline/archive-box.svg' },
+      { n: 13, name: 'rectangle-stack',desc: '矩形堆疊：分頁堆積的視覺',                    lib: 'Heroicons',  lic: 'MIT',      url: 'https://cdn.jsdelivr.net/npm/heroicons@2.1.5/24/outline/rectangle-stack.svg' },
+      { n: 14, name: 'window',         desc: '瀏覽器視窗：對應 web 環境',                  lib: 'Heroicons',  lic: 'MIT',      url: 'https://cdn.jsdelivr.net/npm/heroicons@2.1.5/24/outline/window.svg' },
+      { n: 15, name: 'folder-open',    desc: '打開的資料夾：分類管理',                      lib: 'Heroicons',  lic: 'MIT',      url: 'https://cdn.jsdelivr.net/npm/heroicons@2.1.5/24/outline/folder-open.svg' },
+
+      // === Phosphor (MIT) ===
+      { n: 16, name: 'browsers',       desc: '多瀏覽器視窗：強烈分頁意象',                  lib: 'Phosphor',   lic: 'MIT',      url: 'https://cdn.jsdelivr.net/npm/@phosphor-icons/core@latest/assets/regular/browsers.svg' },
+      { n: 17, name: 'folders',        desc: '多個資料夾：分類強調',                        lib: 'Phosphor',   lic: 'MIT',      url: 'https://cdn.jsdelivr.net/npm/@phosphor-icons/core@latest/assets/regular/folders.svg' },
+      { n: 18, name: 'stack',          desc: '堆疊：簡潔有力',                              lib: 'Phosphor',   lic: 'MIT',      url: 'https://cdn.jsdelivr.net/npm/@phosphor-icons/core@latest/assets/regular/stack.svg' },
+
+      // === Tabler (MIT) ===
+      { n: 19, name: 'browser',        desc: '單瀏覽器視窗 + tab 標籤',                    lib: 'Tabler',     lic: 'MIT',      url: 'https://cdn.jsdelivr.net/npm/@tabler/icons@latest/icons/outline/browser.svg' },
+      { n: 20, name: 'layout-grid',    desc: '網格（線條更細）',                            lib: 'Tabler',     lic: 'MIT',      url: 'https://cdn.jsdelivr.net/npm/@tabler/icons@latest/icons/outline/layout-grid.svg' },
+    ];
+
+    const SIZES = [
+      { size: 16, label: '16px' },
+      { size: 32, label: '32px' },
+      { size: 48, label: '48px' },
+      { size: 128, label: '128px' },
+    ];
+
+    const grid = document.getElementById('grid');
+    ICONS.forEach((ic) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.position = 'relative';
+      card.innerHTML = `
+        <div class="num">#${String(ic.n).padStart(2, '0')}</div>
+        <div class="preview-row">
+          ${SIZES.map(s => `
+            <div class="icon-cell">
+              <div class="icon-frame size-${s.size}">
+                <img src="${ic.url}" alt="${ic.name}" />
+              </div>
+              <span class="size-label">${s.label}</span>
+            </div>
+          `).join('')}
+        </div>
+        <div class="meta">
+          <div class="name mono">${ic.name}</div>
+          <div class="desc">${ic.desc}</div>
+          <div class="source">
+            <span class="lib">${ic.lib}</span>
+            <span class="lic">${ic.lic}</span>
+          </div>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+  </script>
+</body>
+</html>
