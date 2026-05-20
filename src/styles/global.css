@@ -1,0 +1,105 @@
+@import './tokens.css';
+@import './utilities.css';
+
+/* Reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: default;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+img {
+  display: block;
+  max-width: 100%;
+}
+
+/* Base */
+html,
+body,
+#app {
+  height: 100%;
+  background: var(--bg-shell);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 400;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+  font-family: inherit;
+}
+
+img {
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+/* checkbox 預設樣式 */
+input[type='checkbox'] {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 0.5px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  background: var(--bg-block);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color var(--t-fast), border-color var(--t-fast);
+  flex-shrink: 0;
+}
+input[type='checkbox']:checked {
+  background: var(--bg-primary-btn);
+  border-color: var(--bg-primary-btn);
+}
+input[type='checkbox']:checked::after {
+  content: '';
+  width: 4px;
+  height: 8px;
+  border-right: 1.5px solid var(--text-on-dark);
+  border-bottom: 1.5px solid var(--text-on-dark);
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+input[type='checkbox']:focus-visible {
+  outline: 0.5px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+/* number input spinner 隱藏 */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}

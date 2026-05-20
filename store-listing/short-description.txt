@@ -1,0 +1,35 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Chrome Web Store 短描述（最多 132 字元）— 各語言版本
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+zh-Hant（繁中，建議用於 zh_TW）：
+一鍵整理瀏覽器分頁：分類、截圖保留 URL、404 自動剔除、關閉釋放記憶體。完全本機運作、10 種語言、深色模式。
+
+zh-Hans（簡中，用於 zh_CN）：
+一键整理浏览器标签页：分类、截图保留 URL、404 自动剔除、关闭释放内存。完全本机运作、10 种语言、深色模式。
+
+en（英文，用於 en、en_US、en_GB）：
+One-click tab cleanup: categorize, snapshot to preserve URLs, auto-exclude 404s, close to free memory. 100% local, 10 languages, dark mode.
+
+ja（日本語）：
+ワンクリックでタブを整理：分類・スクショ保存・404 自動除外・閉じてメモリ解放。完全ローカル、10 言語、ダークモード対応。
+
+ko（한국어）：
+한 번의 클릭으로 탭 정리: 분류, 스크린샷으로 URL 보존, 404 자동 제외, 닫아서 메모리 해제. 완전 로컬, 10개 언어, 다크 모드.
+
+es（西班牙文）：
+Limpieza de pestañas con un clic: categorizar, capturar URL, excluir 404, cerrar para liberar memoria. 100% local, 10 idiomas, modo oscuro.
+
+fr（法文）：
+Nettoyage des onglets en un clic : catégoriser, capturer l'URL, exclure 404, fermer pour libérer la mémoire. 100% local, 10 langues, mode sombre.
+
+de（德文）：
+Tab-Aufräumen mit einem Klick: kategorisieren, URL per Screenshot sichern, 404 ausschließen, Speicher freigeben. 100% lokal, 10 Sprachen.
+
+pt（葡萄牙文）：
+Limpeza de abas com um clique: categorizar, capturar URL, excluir 404, fechar para liberar memória. 100% local, 10 idiomas, modo escuro.
+
+vi（越南文）：
+Dọn dẹp tab một cú click: phân loại, lưu URL bằng ảnh chụp, loại 404, đóng để giải phóng bộ nhớ. 100% local, 10 ngôn ngữ, chế độ tối.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

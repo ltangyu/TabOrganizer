@@ -1,0 +1,82 @@
+:root {
+  /* ── Radius ── */
+  --radius: 10px;
+  --radius-lg: 12px;
+  --radius-sm: 4px;
+  --radius-pill: 9999px;
+
+  /* ── Color ── 黑白灰，唯一彩色例外是 status dot ── */
+  --bg-block: #ffffff;
+  --bg-shell: #fafafa;
+  --bg-sidebar: #fafafa;
+  --bg-surface: #f8f9fa;
+  --bg-surface-2: #f1f3f5;
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.06);
+  --bg-overlay: rgba(0, 0, 0, 0.35);
+  --bg-primary-btn: #000000;
+  --bg-primary-btn-hover: #1a1a1a;
+  --bg-danger-btn: #e81123;
+
+  --text-primary: #000000;
+  --text-secondary: #6b6b6b;
+  --text-muted: #9c9c9c;
+  --text-dim: #aaaaaa;
+  --text-on-dark: #ffffff;
+
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-medium: rgba(0, 0, 0, 0.10);
+  --border-strong: rgba(0, 0, 0, 0.16);
+  --border-focus: #000000;
+
+  /* ── Shadow ── */
+  --shadow-shell:
+    inset 0 0 0 1px #fafafa,
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 3px 6px rgba(0, 0, 0, 0.26),
+    0 6px 12px -2px rgba(0, 0, 0, 0.34);
+  --shadow-modal: 0 4px 24px rgba(0, 0, 0, 0.18);
+  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.06);
+
+  /* ── Transition ── */
+  --t-fast: 0.15s ease;
+  --t-base: 0.2s ease;
+
+  /* ── Typography ── */
+  --font-sans: 'Inter', 'Microsoft JhengHei', 'PingFang TC', 'Noto Sans TC', sans-serif;
+  --font-mono: 'Space Grotesk', 'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+
+  --text-micro: 9px;
+  --text-xs: 10px;
+  --text-sm: 11px;
+  --text-base: 12px;
+  --text-md: 13px;
+  --text-lg: 14px;
+  --text-xl: 16px;
+
+  --letter-uppercase: 0.08em;
+
+  /* ── Sizing ── */
+  --shell-padding: 24px;
+  --titlebar-h: 36px;
+  --sidebar-w: 220px;
+
+  /* ── Status Lights ── 唯一彩色 ── */
+  --status-ok: #00ff41;
+  --status-warn: #facc15;
+  --status-err: #e53935;
+  --status-idle: #c8c6c6;
+
+  /* ── Glass-morphism ── */
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  --glass-blur: blur(20px);
+
+  /* ── Spacing ── */
+  --gap-1: 4px;
+  --gap-2: 8px;
+  --gap-3: 12px;
+  --gap-4: 16px;
+  --gap-5: 20px;
+  --gap-6: 24px;
+  --gap-7: 30px;
+}

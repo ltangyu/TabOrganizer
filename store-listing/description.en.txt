@@ -1,0 +1,41 @@
+TabOrganizer — One-click tab cleanup with snapshot archive and memory release
+
+Long browsing sessions inevitably accumulate dozens of tabs—chewing up RAM, hard to revisit later, and risky to close. TabOrganizer solves this with an end-to-end automated workflow:
+
+✨ Features
+
+• Tab categorization — Create custom categories + auto-suggest by domain (supports *.example.com wildcards)
+• Snapshot archive — Capture URL, title, and screenshot; thumbnail stored in IndexedDB, original saved to your Downloads folder
+• 404 auto-exclude — HEAD-check before capture; broken links recorded but skipped to save screenshot cost, tabs still closed to free memory
+• One-click organize — All tabs auto-scanned → checked → snapshotted → closed in a sequential pipeline
+• Manager grid — Full-screen thumbnail grid with filter / search / reopen-by-category support
+• Periodic revalidation — Background task re-checks archived links; dead ones flagged red
+• Dark mode — Dark gray palette (not pure black); status dots retain original colors
+• 10 languages — Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Spanish, French, German, Portuguese, Vietnamese
+
+🔒 Fully local
+
+All data (categories, snapshots, archive) stays in your browser's IndexedDB and local Downloads folder. **No data is ever sent to any external server.** See full privacy policy on GitHub.
+
+🎨 Design
+
+Follows ii Design Language: black/white/gray palette (status dots are the only color exception), 0.5px borders, 10px corner radius, Inter + Space Grotesk typography, no emoji.
+
+📦 Open source
+
+MIT License. Full source: https://github.com/ltangyu/TabOrganizer
+
+🛠 Tech
+
+Chrome MV3, Vue 3, TypeScript, IndexedDB, Service Worker. Runs entirely locally with zero third-party tracking.
+
+⚙️ Customizable
+
+Control panel exposes settings for snapshot delay, thumbnail width, periodic revalidation interval, grid columns, card density, thumbnail aspect ratio, and more.
+
+💡 Who is it for
+
+• Heavy tab users whose browser RAM constantly spikes
+• Students and researchers who want orderly archives of reference material
+• Anyone who wants to preserve browsing history without keeping tabs open
+• Privacy-conscious users who don't want their browsing data uploaded anywhere
