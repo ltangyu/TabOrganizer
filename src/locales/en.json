@@ -170,5 +170,6 @@
   "recover.restoreAll": "Restore all ({n})",
   "recover.reopening": "Opening…",
   "recover.reopened": "Opened {n} tabs",
-  "recover.skipped": "Skipped {n} (already open or duplicate)"
+  "recover.skipped": "Skipped {n} (already open or duplicate)",
+  "scrollTop.aria": "Scroll to top"
 }

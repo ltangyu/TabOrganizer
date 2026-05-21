@@ -7,6 +7,8 @@ import { formatRelative } from '@/utils/time';
 import ThumbnailCard from './ThumbnailCard.vue';
 import { computed } from 'vue';
 
+import { ref, onBeforeUnmount, onMounted, watch, nextTick } from 'vue';
+
 const props = defineProps<{ items: ArchivedTab[]; mode: 'grid' | 'list' }>();
 const emit = defineEmits<{
   open: [item: ArchivedTab];
@@ -24,6 +26,40 @@ const gridStyle = computed(() => ({
   '--cols': String(tweaks.cols),
   '--card-gap': `${tweaks.gap}px`,
 }));
+
+// 回到最上面按鈕：scroll > 400px 顯示
+const gridContainer = ref<HTMLElement | null>(null);
+const listContainer = ref<HTMLElement | null>(null);
+const showScrollTop = ref(false);
+const SCROLL_THRESHOLD = 400;
+
+function activeScrollEl(): HTMLElement | null {
+  return isGrid.value ? gridContainer.value : listContainer.value;
+}
+
+function handleScroll(): void {
+  const el = activeScrollEl();
+  if (!el) return;
+  showScrollTop.value = el.scrollTop > SCROLL_THRESHOLD;
+}
+
+function scrollToTop(): void {
+  const el = activeScrollEl();
+  el?.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// 切換 grid/list mode 時，舊容器的 scroll listener 隨 v-if 銷毀自動斷開；
+// 重設按鈕狀態為隱藏，等新容器 mounted 後重新判斷 scrollTop。
+watch(isGrid, async () => {
+  showScrollTop.value = false;
+  await nextTick();
+  handleScroll();
+});
+
+onMounted(() => handleScroll());
+onBeforeUnmount(() => {
+  showScrollTop.value = false;
+});
 </script>
 
 <template>
@@ -31,7 +67,13 @@ const gridStyle = computed(() => ({
     <span class="label-micro">EMPTY</span>
     <p class="text-secondary">{{ t('empty.archive') }}</p>
   </div>
-  <div v-else-if="isGrid" class="thumb-grid scroll-y" :style="gridStyle">
+  <div
+    v-else-if="isGrid"
+    ref="gridContainer"
+    class="thumb-grid scroll-y"
+    :style="gridStyle"
+    @scroll.passive="handleScroll"
+  >
     <ThumbnailCard
       v-for="item in items"
       :key="item.id"
@@ -42,7 +84,12 @@ const gridStyle = computed(() => ({
       @remove="(i) => emit('remove', i)"
     />
   </div>
-  <div v-else class="list-wrap scroll-y">
+  <div
+    v-else
+    ref="listContainer"
+    class="list-wrap scroll-y"
+    @scroll.passive="handleScroll"
+  >
     <table class="list-table">
       <thead>
         <tr>
@@ -79,6 +126,32 @@ const gridStyle = computed(() => ({
       </tbody>
     </table>
   </div>
+
+  <!-- 回到最上面浮動按鈕：scroll > 400px 才出現 -->
+  <Transition name="scroll-top-fade">
+    <button
+      v-show="showScrollTop"
+      class="scroll-to-top"
+      @click="scrollToTop"
+      :aria-label="t('scrollTop.aria')"
+      :title="t('scrollTop.aria')"
+    >
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <line x1="12" y1="19" x2="12" y2="5" />
+        <polyline points="5 12 12 5 19 12" />
+      </svg>
+    </button>
+  </Transition>
 </template>
 
 <style scoped>
@@ -165,5 +238,42 @@ const gridStyle = computed(() => ({
   letter-spacing: 0.08em;
   font-weight: 600;
   color: var(--text-secondary);
+}
+
+/* 回到最上面浮動按鈕：右下角，固定於 viewport */
+.scroll-to-top {
+  appearance: none;
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 800;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-pill);
+  border: 0.5px solid var(--border-medium);
+  background: var(--text-primary);
+  color: var(--text-on-dark);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--t-fast), background var(--t-fast), box-shadow var(--t-fast);
+}
+.scroll-to-top:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-modal);
+}
+.scroll-to-top:active {
+  transform: translateY(0);
+}
+.scroll-top-fade-enter-active,
+.scroll-top-fade-leave-active {
+  transition: opacity var(--t-base), transform var(--t-base);
+}
+.scroll-top-fade-enter-from,
+.scroll-top-fade-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
 }
 </style>

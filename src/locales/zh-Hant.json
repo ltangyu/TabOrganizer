@@ -170,5 +170,6 @@
   "recover.restoreAll": "一鍵全部復原（{n} 個）",
   "recover.reopening": "開啟中…",
   "recover.reopened": "已開啟 {n} 個分頁",
-  "recover.skipped": "跳過 {n} 個（已開或重複）"
+  "recover.skipped": "跳過 {n} 個（已開或重複）",
+  "scrollTop.aria": "回到最上面"
 }
