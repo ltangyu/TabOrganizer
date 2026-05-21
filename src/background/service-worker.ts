@@ -50,47 +50,7 @@ async function clearStaleOrganizeFlag(): Promise<void> {
   }
 }
 
-/**
- * 在 popup type 視窗中開啟管理頁（無 tab bar、無位址列）。
- * 若 launcher 環境（--user-data-dir + --load-extension）偵測到，會關掉
- * 其他預設視窗，讓使用者只看到 manager。
- */
-async function openManagerAsApp(closeOtherWindows = false): Promise<void> {
-  const managerUrl = chrome.runtime.getURL('src/manager/manager.html');
-
-  // 若已有 manager 視窗，focus 即可
-  const existing = await chrome.windows.getAll({ populate: true });
-  for (const w of existing) {
-    const tabs = w.tabs ?? [];
-    if (tabs.some((t) => t.url?.startsWith(managerUrl))) {
-      if (w.id != null) chrome.windows.update(w.id, { focused: true });
-      return;
-    }
-  }
-
-  // 新開 popup 視窗（無 chrome UI，像 native app）
-  await chrome.windows.create({
-    url: managerUrl,
-    type: 'popup',
-    width: 1280,
-    height: 800,
-    focused: true,
-  });
-
-  // 關掉預設的 normal 視窗（launcher 模式時 Chrome 預設會開 NTP）
-  if (closeOtherWindows) {
-    const all = await chrome.windows.getAll({ populate: true });
-    for (const w of all) {
-      const tabs = w.tabs ?? [];
-      const hasManager = tabs.some((t) => t.url?.startsWith(managerUrl));
-      if (!hasManager && w.id != null) {
-        chrome.windows.remove(w.id);
-      }
-    }
-  }
-}
-
-chrome.runtime.onInstalled.addListener(async (details) => {
+chrome.runtime.onInstalled.addListener(async () => {
   const cats = await listCategories();
   if (cats.length === 0) {
     // 內建一個「收件匣」分類，name 用繁中作為 fallback，但實際顯示走 builtinKey i18n
@@ -99,19 +59,12 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   await clearStaleOrganizeFlag();
   const settings = await getSettings();
   await ensureAlarmConfigured(settings.revalidateIntervalMinutes);
-
-  // 首次安裝：自動開啟管理頁（popup type，並關掉預設視窗）
-  if (details.reason === 'install') {
-    await openManagerAsApp(true);
-  }
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   await clearStaleOrganizeFlag();
   const settings = await getSettings();
   await ensureAlarmConfigured(settings.revalidateIntervalMinutes);
-  // 每次 Chrome 啟動（含我們的 launcher）自動開管理頁 popup 視窗
-  await openManagerAsApp(true);
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
