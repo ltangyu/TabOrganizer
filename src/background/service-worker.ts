@@ -167,13 +167,11 @@ async function finishOrganize(q: OrganizeQueue): Promise<void> {
 async function processNextChunk(): Promise<void> {
   // 安全網 alarm：30 秒後 fallback 觸發。
   // 若本輪正常結束，會被結尾的 100ms 短 delay alarm 覆蓋（同 name → replace）。
-  // 若 SW 在 chunk 處理中途死掉，30 秒後此 alarm 仍會喚醒 SW 繼續下一輪 ——
-  // 避免「卡住」永遠不再前進。
+  // 若 SW 在 chunk 處理中途死掉，30 秒後此 alarm 仍會喚醒 SW 繼續下一輪。
   chrome.alarms.create(ORGANIZE_NEXT_CHUNK_ALARM, { delayInMinutes: 0.5 });
 
   const q = await getQueue();
   if (!q) {
-    // 沒有 queue → 清 flag 並退出
     chrome.alarms.clear(ORGANIZE_NEXT_CHUNK_ALARM);
     await setSettings({ organizeInProgress: false, organizeStartedAt: 0 });
     return;
@@ -185,49 +183,52 @@ async function processNextChunk(): Promise<void> {
     return;
   }
 
-  // 把 chunk 從 queue splice 出來後立即存回。
-  // 重要：這 chunk 對應的 tabId 已從 queue 移除，若 SW 在處理中死掉，
-  // 這些 tab 算 lost（不會再嘗試），但 30s fallback alarm 會接著處理 queue 剩下的部分 ——
-  // 比讓整個流程卡住好。
-  const chunk = q.alive.splice(0, ORGANIZE_CHUNK_SIZE);
-  await setQueue(q);
+  // 重要：peek-then-shift 模式
+  // 不再一次 splice 整個 chunk 出來（這樣 SW 中途死掉會損失整個 chunk = 10 tab）。
+  // 改為每處理完「一個」tab 才 shift 並存回 queue。
+  // SW 死掉最多只重複處理 / 損失「正在跑 snapshotTabs 那一個」tab。
+  // 對 415 tab 的整理，把損失上限從 ~300 (30 deaths × 10) 降到 ~30 (30 deaths × 1)。
+  for (let i = 0; i < ORGANIZE_CHUNK_SIZE; i++) {
+    if (q.alive.length === 0) break;
 
-  const baseCurrent = q.archived + q.failed + q.excluded;
-  let chunkArchived = 0;
-  let chunkFailed = 0;
+    const t = q.alive[0]!; // peek，先別 shift
+    const baseCurrent = q.archived + q.failed + q.excluded;
 
-  try {
-    const result = await snapshotTabs(chunk, (info) => {
-      broadcast({
-        type: 'organize/progress',
-        current: baseCurrent + info.current,
-        total: q.scanned,
-        stage: 'snapshotting',
-        ...(info.currentTitle !== undefined ? { currentTitle: info.currentTitle } : {}),
-      });
+    broadcast({
+      type: 'organize/progress',
+      current: baseCurrent + 1,
+      total: q.scanned,
+      stage: 'snapshotting',
+      currentTitle: t.title,
     });
-    chunkArchived = result.archivedCount;
-    chunkFailed = result.failedCount;
-  } catch (e) {
-    console.warn('[TabOrganizer] chunk failed', e);
-    chunkFailed = chunk.length;
+
+    let archivedDelta = 0;
+    let failedDelta = 0;
+    try {
+      const result = await snapshotTabs([t]);
+      archivedDelta = result.archivedCount;
+      failedDelta = result.failedCount;
+    } catch (e) {
+      console.warn('[TabOrganizer] single-tab failed', t.url, e);
+      failedDelta = 1;
+    }
+
+    // 處理完才從 queue 移除 + 寫回（不在處理前 shift，避免 SW 死掉 lose tab）
+    q.alive.shift();
+    q.archived += archivedDelta;
+    q.failed += failedDelta;
+    q.closed += archivedDelta + failedDelta;
+    await setQueue(q);
   }
 
-  // 重讀 queue 合併計數（防止其他 chunk 同時寫入造成 lost update）
-  const q2 = (await getQueue()) ?? q;
-  q2.archived += chunkArchived;
-  q2.failed += chunkFailed;
-  // close-as-you-go：archived 與 failed 的 tab 都已被 snapshotter 關掉
-  q2.closed += chunkArchived + chunkFailed;
-  await setQueue(q2);
   broadcast({ type: 'archive/changed' });
 
-  if (q2.alive.length > 0) {
+  if (q.alive.length > 0) {
     // 用 100ms 短 delay 覆蓋安全網 alarm，讓下一輪盡快開始
     chrome.alarms.create(ORGANIZE_NEXT_CHUNK_ALARM, { delayInMinutes: 0.0017 });
   } else {
     chrome.alarms.clear(ORGANIZE_NEXT_CHUNK_ALARM);
-    await finishOrganize(q2);
+    await finishOrganize(q);
   }
 }
 
