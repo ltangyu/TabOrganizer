@@ -59,6 +59,15 @@ export async function captureFullPage(
   const quality = opts.quality ?? 80;
   const maxHeight = opts.maxHeight ?? 16000;
 
+  // 防禦性 detach：上一輪若是 timeout 中斷，debugger session 可能還掛著 →
+  // 下次 attach 會回「Another debugger is already attached」。
+  // 先試著清掉殘留 session，沒有就無聲略過。
+  try {
+    await chrome.debugger.detach({ tabId });
+  } catch {
+    /* no leftover session, fine */
+  }
+
   await withTimeout(
     chrome.debugger.attach({ tabId }, DEBUGGER_VERSION),
     ATTACH_TIMEOUT_MS,

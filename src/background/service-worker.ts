@@ -8,6 +8,7 @@ import { addExcluded, listCategories, createCategory, db } from '@/modules/archi
 import { backfillUncategorized, loadCategoryState } from '@/modules/category-engine';
 import { findMissingTabs, reopenMissingTabs, saveOrganizeScanSnapshot } from '@/modules/recovery';
 import { openTabsSkipDuplicates } from '@/modules/tab-opener';
+import { dedupeCandidatesByUrl } from '@/modules/dedupe';
 import {
   ALARM_REVALIDATE,
   DEFAULT_INTERVAL_MIN,
@@ -133,6 +134,8 @@ interface OrganizeQueue {
   archived: number;
   failed: number;
   excluded: number;
+  /** 同 URL 多開的「重複分頁」— 在 organize 一開始就直接關掉，不重複截圖 */
+  duplicates: number;
   closed: number;
   scanned: number;
   t0: number;
@@ -157,6 +160,7 @@ async function finishOrganize(q: OrganizeQueue): Promise<void> {
     checked: q.scanned,
     snapshotted: q.archived,
     excluded: q.excluded,
+    duplicates: q.duplicates,
     closed: q.closed,
     durationMs: Date.now() - q.t0,
   };
@@ -286,7 +290,7 @@ async function organizeAll(): Promise<void> {
     }
     if (scan.total === 0) {
       const summary: OrganizeSummary = {
-        scanned: 0, checked: 0, snapshotted: 0, excluded: 0, closed: 0,
+        scanned: 0, checked: 0, snapshotted: 0, excluded: 0, duplicates: 0, closed: 0,
         durationMs: Date.now() - t0,
       };
       broadcast({ type: 'organize/done', summary });
@@ -294,9 +298,25 @@ async function organizeAll(): Promise<void> {
       return;
     }
 
-    broadcast({ type: 'organize/progress', current: 0, total: scan.total, stage: 'checking' });
+    // 去重：同 URL 多個分頁 → 只保留第一個處理，其餘直接關掉。
+    // 不浪費時間在重複的截圖上；duplicate tab 也算「已關閉」。
+    const { unique: candidates, duplicateTabIds } = dedupeCandidatesByUrl(scan.candidates);
+    let closedDuplicates = 0;
+    if (duplicateTabIds.length > 0) {
+      console.log(
+        '[TabOrganizer] dedupe: scan=',
+        scan.total,
+        'unique=',
+        candidates.length,
+        'duplicates=',
+        duplicateTabIds.length,
+      );
+      closedDuplicates = await closeTabs(duplicateTabIds);
+    }
+
+    broadcast({ type: 'organize/progress', current: 0, total: candidates.length, stage: 'checking' });
     const checkResults = await checkBatch(
-      scan.candidates.map((c) => c.url),
+      candidates.map((c) => c.url),
       { concurrency: 16, timeoutMs: 4000 },
       (done, total, lastUrl) => {
         broadcast({
@@ -311,7 +331,7 @@ async function organizeAll(): Promise<void> {
 
     const alive: TabCandidate[] = [];
     const dead: TabCandidate[] = [];
-    for (const c of scan.candidates) {
+    for (const c of candidates) {
       const r = checkResults.get(c.url);
       if (r && r.ok) alive.push(c);
       else dead.push(c);
@@ -331,14 +351,17 @@ async function organizeAll(): Promise<void> {
     }
     const closedDead = await closeTabs(dead.map((c) => c.tabId));
 
-    // 建立 queue 給 chunk 處理
+    // 建立 queue 給 chunk 處理。
+    // scanned 用原始 scan.total 反映「使用者本來有幾個 tab」；
+    // total 給 progress 用 unique 數（candidates.length）
     const queue: OrganizeQueue = {
       alive,
       archived: 0,
       failed: 0,
       excluded: dead.length,
-      closed: closedDead,
-      scanned: scan.total,
+      duplicates: duplicateTabIds.length,
+      closed: closedDuplicates + closedDead,
+      scanned: candidates.length, // 處理的 unique 數，用於 progress 分母
       t0,
     };
     await setQueue(queue);
@@ -352,7 +375,7 @@ async function organizeAll(): Promise<void> {
     broadcast({
       type: 'organize/progress',
       current: dead.length,
-      total: scan.total,
+      total: candidates.length,
       stage: 'snapshotting',
     });
     chrome.alarms.create(ORGANIZE_NEXT_CHUNK_ALARM, { delayInMinutes: 0.0017 });

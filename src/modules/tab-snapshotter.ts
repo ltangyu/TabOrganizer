@@ -18,6 +18,12 @@ const THUMB_MAX_WIDTH = 512;
 const FULL_PAGE_MAX_HEIGHT = 8000;
 /** captureVisibleTab fallback 的 timeout（ms）— 避免某些 tab 連可視區截圖也 hang。 */
 const VISIBLE_CAPTURE_TIMEOUT_MS = 5_000;
+/**
+ * Chrome 對 chrome.tabs.captureVisibleTab 有 rate limit
+ * （MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND ≈ 2/s）。
+ * 連續快速 fallback 時會觸發 quota 錯誤。每次 captureVisibleTab 前先 sleep 一下。
+ */
+const VISIBLE_CAPTURE_RATE_GAP_MS = 600;
 
 /**
  * 已知會把 chrome.debugger Page.captureScreenshot {captureBeyondViewport:true}
@@ -112,6 +118,7 @@ async function captureTab(t: TabCandidate): Promise<string> {
   // 對已知重 SPA（Drive folder 等）直接走 captureVisibleTab，
   // 跳過會 hang 的 chrome.debugger captureBeyondViewport。
   if (shouldSkipFullPage(t.url)) {
+    await sleep(VISIBLE_CAPTURE_RATE_GAP_MS);
     return await withTimeout(
       chrome.tabs.captureVisibleTab(t.windowId, { format: 'jpeg', quality: 80 }),
       VISIBLE_CAPTURE_TIMEOUT_MS,
@@ -128,6 +135,8 @@ async function captureTab(t: TabCandidate): Promise<string> {
   } catch (debugErr) {
     console.warn('[TabOrganizer] full-page capture failed, fallback', t.url, debugErr);
     // tab 已 active，直接 captureVisibleTab 抓可視區（包 timeout 避免它也 hang）
+    // 先 sleep 避開 captureVisibleTab 的 2/s rate limit
+    await sleep(VISIBLE_CAPTURE_RATE_GAP_MS);
     return await withTimeout(
       chrome.tabs.captureVisibleTab(t.windowId, { format: 'jpeg', quality: 80 }),
       VISIBLE_CAPTURE_TIMEOUT_MS,

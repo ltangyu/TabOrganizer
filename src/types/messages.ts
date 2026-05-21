@@ -26,6 +26,8 @@ export interface OrganizeSummary {
   checked: number;
   snapshotted: number;
   excluded: number;
+  /** 同 URL 多個分頁，去重後直接關掉的數量（沒重複截圖） */
+  duplicates: number;
   closed: number;
   durationMs: number;
 }
