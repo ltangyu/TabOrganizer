@@ -6,7 +6,12 @@ import { slugifyForFilename } from '@/utils/domain';
 import { addArchivedTab } from './archive-store';
 import { captureFullPage } from './full-page-capture';
 
-const FALLBACK_SETTLE_MS = 150;
+/**
+ * 切 active 後等待頁面渲染（GPU 從背景節流喚醒）的時間。
+ * 太短 → 截到黑屏或部分渲染；太長 → 整理 412 tab 多花 N*delta 秒。
+ * 400ms 經驗值：覆蓋大多數頁面從背景節流恢復到首次 paint 的時間。
+ */
+const SETTLE_DELAY_MS = 400;
 const THUMB_MAX_WIDTH = 512;
 
 export type SnapshotProgress = (info: {
@@ -25,12 +30,28 @@ export interface SnapshotOutcome {
 
 /**
  * 抓單一 tab 截圖：
- * 1. 優先用 chrome.debugger 全頁截圖（背景 tab 也能截，不搶焦點，且有 timeout 保護）
- * 2. 若 debugger 失敗才退而求其次：切 active + captureVisibleTab
- *    這條 fallback 會打斷使用者操作（管理頁失焦），但只在 chrome.debugger
- *    完全不可用時才會走（例如 chrome:// 內部頁、debugger 被其他 ext 佔用）
+ *
+ * **關鍵：必須先 chrome.tabs.update {active:true} 才能截到真實內容。**
+ * 雖然 chrome.debugger Page.captureScreenshot 能對背景 tab 呼叫，但 Chrome
+ * 會節流背景 tab 的 GPU compositing → 抓到黑屏或殘留 frame。
+ *
+ * 不會搶管理頁焦點：chrome.tabs.update {active:true} 只改變該視窗內哪個
+ * tab 是 active，**不會改變 Windows 視窗焦點**。管理頁通常在獨立視窗
+ * （--app 或 popup window），所以使用者完全不會被干擾，只有「被整理的那個
+ * 視窗」內部會看到 tab 一個個切換並被關閉。
+ *
+ * 1. 切 active → sleep 400ms 喚醒渲染
+ * 2. chrome.debugger 全頁截圖（含滾動範圍）
+ * 3. 若 debugger 失敗 → 用 captureVisibleTab 抓 active tab 可視區（fallback）
  */
 async function captureTab(t: TabCandidate): Promise<string> {
+  try {
+    await chrome.tabs.update(t.tabId, { active: true });
+  } catch {
+    /* tab 可能已被使用者關閉 */
+  }
+  await sleep(SETTLE_DELAY_MS);
+
   try {
     return await captureFullPage(t.tabId, {
       format: 'jpeg',
@@ -39,10 +60,7 @@ async function captureTab(t: TabCandidate): Promise<string> {
     });
   } catch (debugErr) {
     console.warn('[TabOrganizer] full-page capture failed, fallback', t.url, debugErr);
-    await chrome.tabs.update(t.tabId, { active: true });
-    // captureVisibleTab 需要視窗也是 focused，但管理頁通常在另一個視窗 ——
-    // 這裡盡量試試看，失敗就讓外層 catch 處理
-    await sleep(FALLBACK_SETTLE_MS);
+    // tab 已 active，直接 captureVisibleTab 抓可視區
     return await chrome.tabs.captureVisibleTab(t.windowId, {
       format: 'jpeg',
       quality: 80,
