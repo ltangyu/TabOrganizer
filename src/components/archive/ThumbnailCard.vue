@@ -81,14 +81,19 @@ onBeforeUnmount(() => {
         <span class="status-dot" :class="statusKind"></span>
       </div>
 
-      <div class="thumb-actions" @click.stop>
-        <button class="action-btn" @click="emit('open', item)">{{ t('card.open') }}</button>
-        <button class="action-btn" @click="emit('recategorize', item)">{{ t('card.categorize') }}</button>
-        <button class="action-btn danger" @click="emit('remove', item)">{{ t('card.delete') }}</button>
+      <!--
+        注意：這層 overlay 不能用 @click.stop 包整個 div，
+        否則 hover 顯示時會把點擊吃掉、無法觸發外層 .thumb-image 的 @click="detail"。
+        改成：每個 button 個別 @click.stop，按鈕之間的空白區可以冒泡到外層開詳情。
+      -->
+      <div class="thumb-actions">
+        <button class="action-btn" @click.stop="emit('open', item)">{{ t('card.open') }}</button>
+        <button class="action-btn" @click.stop="emit('recategorize', item)">{{ t('card.categorize') }}</button>
+        <button class="action-btn danger" @click.stop="emit('remove', item)">{{ t('card.delete') }}</button>
       </div>
     </div>
 
-    <div class="thumb-meta">
+    <div class="thumb-meta" @click="emit('detail', item)">
       <div class="thumb-title">{{ item.title }}</div>
       <div class="thumb-domain">
         <div
@@ -122,11 +127,10 @@ onBeforeUnmount(() => {
     <div
       v-if="tweaks.actions === 'footer'"
       class="thumb-footer-actions"
-      @click.stop
     >
-      <button class="action-btn" @click="emit('open', item)">{{ t('card.open') }}</button>
-      <button class="action-btn" @click="emit('recategorize', item)">{{ t('card.categorize') }}</button>
-      <button class="action-btn" @click="emit('remove', item)">{{ t('card.delete') }}</button>
+      <button class="action-btn" @click.stop="emit('open', item)">{{ t('card.open') }}</button>
+      <button class="action-btn" @click.stop="emit('recategorize', item)">{{ t('card.categorize') }}</button>
+      <button class="action-btn" @click.stop="emit('remove', item)">{{ t('card.delete') }}</button>
     </div>
   </article>
 </template>
@@ -262,6 +266,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  cursor: pointer;
 }
 .thumb-title {
   font-size: var(--text-base);
