@@ -4,6 +4,7 @@ import { sleep } from '@/utils/time';
 import { resizeToThumb } from '@/utils/image';
 import { slugifyForFilename } from '@/utils/domain';
 import { addArchivedTab } from './archive-store';
+import { captureFullPage } from './full-page-capture';
 
 const SETTLE_DELAY_MS = 150;
 const THUMB_MAX_WIDTH = 512;
@@ -39,10 +40,21 @@ export async function snapshotTabs(
       await chrome.tabs.update(t.tabId, { active: true });
       await sleep(SETTLE_DELAY_MS);
 
-      const dataUrl = await chrome.tabs.captureVisibleTab(t.windowId, {
-        format: 'jpeg',
-        quality: 80,
-      });
+      // 優先用 chrome.debugger 截整頁（含滾動範圍），失敗 fallback 到可見區
+      let dataUrl: string;
+      try {
+        dataUrl = await captureFullPage(t.tabId, {
+          format: 'jpeg',
+          quality: 80,
+          maxHeight: 16000,
+        });
+      } catch (debugErr) {
+        console.warn('[TabOrganizer] full-page capture failed, fallback', t.url, debugErr);
+        dataUrl = await chrome.tabs.captureVisibleTab(t.windowId, {
+          format: 'jpeg',
+          quality: 80,
+        });
+      }
 
       let thumbBlob: Blob | null = null;
       try {

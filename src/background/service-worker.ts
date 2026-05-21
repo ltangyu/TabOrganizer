@@ -1,4 +1,5 @@
 import type { RuntimeMessage, OrganizeSummary } from '@/types/messages';
+import type { TabCandidate } from '@/types/archive';
 import { scanAllTabs } from '@/modules/tab-scanner';
 import { checkBatch } from '@/modules/link-checker';
 import { snapshotTabs } from '@/modules/tab-snapshotter';
@@ -82,8 +83,8 @@ chrome.runtime.onStartup.addListener(async () => {
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === KEEP_ALIVE_ALARM) {
-    // 純粹喚醒 SW 防 idle timeout，不做事
+  if (alarm.name === ORGANIZE_NEXT_CHUNK_ALARM) {
+    await processNextChunk();
     return;
   }
   if (alarm.name === ALARM_REVALIDATE) {
@@ -111,13 +112,102 @@ function ensureManagerOpen(focusProgress = false): void {
   });
 }
 
-/** Keep-alive：在 organize 進行中每 25 秒 ping 一次 SW 防止 idle timeout suspend。 */
-const KEEP_ALIVE_ALARM = 'tab-organizer-keepalive';
-function startOrganizeKeepAlive(): void {
-  chrome.alarms.create(KEEP_ALIVE_ALARM, { periodInMinutes: 25 / 60 });
+/**
+ * Chunked organize architecture（真正無限制處理 N 個 tab）：
+ * 1. organizeAll() 跑 scan + check 階段（短時間）
+ * 2. 結束後把 alive 候選名單存進 chrome.storage（OrganizeQueue）
+ * 3. 觸發 chrome.alarms 'organize-next-chunk'
+ * 4. alarm handler 從 storage 讀 queue，處理 CHUNK_SIZE 個 tab，回存 queue
+ * 5. 若還有 → 再觸發 alarm（SW 可以中間死掉，下次 alarm 喚醒繼續）
+ * 6. queue 空 → 廣播 done、清 flag
+ */
+const ORGANIZE_QUEUE_KEY = 'tabOrganizer.organizeQueue';
+const ORGANIZE_NEXT_CHUNK_ALARM = 'tab-organizer-next-chunk';
+const ORGANIZE_CHUNK_SIZE = 10;
+
+interface OrganizeQueue {
+  alive: TabCandidate[];
+  archived: number;
+  failed: number;
+  excluded: number;
+  closed: number;
+  scanned: number;
+  t0: number;
 }
-function stopOrganizeKeepAlive(): void {
-  chrome.alarms.clear(KEEP_ALIVE_ALARM);
+
+async function getQueue(): Promise<OrganizeQueue | null> {
+  const r = (await chrome.storage.local.get(ORGANIZE_QUEUE_KEY))[ORGANIZE_QUEUE_KEY];
+  return (r as OrganizeQueue | undefined) ?? null;
+}
+
+async function setQueue(q: OrganizeQueue | null): Promise<void> {
+  if (q === null) {
+    await chrome.storage.local.remove(ORGANIZE_QUEUE_KEY);
+  } else {
+    await chrome.storage.local.set({ [ORGANIZE_QUEUE_KEY]: q });
+  }
+}
+
+async function finishOrganize(q: OrganizeQueue): Promise<void> {
+  const summary: OrganizeSummary = {
+    scanned: q.scanned,
+    checked: q.scanned,
+    snapshotted: q.archived,
+    excluded: q.excluded,
+    closed: q.closed,
+    durationMs: Date.now() - q.t0,
+  };
+  broadcast({ type: 'archive/changed' });
+  broadcast({ type: 'organize/done', summary });
+  await setQueue(null);
+  await setSettings({ organizeInProgress: false, organizeStartedAt: 0 });
+}
+
+async function processNextChunk(): Promise<void> {
+  const q = await getQueue();
+  if (!q) {
+    // 沒有 queue → 清 flag 並退出
+    await setSettings({ organizeInProgress: false, organizeStartedAt: 0 });
+    return;
+  }
+
+  if (q.alive.length === 0) {
+    await finishOrganize(q);
+    return;
+  }
+
+  // 處理下一個 chunk
+  const chunk = q.alive.splice(0, ORGANIZE_CHUNK_SIZE);
+  const baseCurrent = q.archived + q.failed + q.excluded;
+
+  try {
+    const result = await snapshotTabs(chunk, (info) => {
+      broadcast({
+        type: 'organize/progress',
+        current: baseCurrent + info.current,
+        total: q.scanned,
+        stage: 'snapshotting',
+        ...(info.currentTitle !== undefined ? { currentTitle: info.currentTitle } : {}),
+      });
+    });
+    q.archived += result.archivedCount;
+    q.failed += result.failedCount;
+    q.closed += result.archivedCount; // close-as-you-go
+  } catch (e) {
+    console.warn('[TabOrganizer] chunk failed', e);
+    q.failed += chunk.length;
+  }
+
+  await setQueue(q);
+  broadcast({ type: 'archive/changed' });
+
+  if (q.alive.length > 0) {
+    // 排下一輪 — 注意：Chrome 對 alarms periodInMinutes 強制最低 30 秒，
+    // 但 delayInMinutes 可較短。0.0017 minutes = ~100ms。
+    chrome.alarms.create(ORGANIZE_NEXT_CHUNK_ALARM, { delayInMinutes: 0.0017 });
+  } else {
+    await finishOrganize(q);
+  }
 }
 
 async function organizeAll(): Promise<void> {
@@ -134,7 +224,7 @@ async function organizeAll(): Promise<void> {
   }
   const t0 = Date.now();
   await setSettings({ organizeInProgress: true, organizeStartedAt: t0 });
-  startOrganizeKeepAlive();
+  await setQueue(null); // 清舊 queue
   ensureManagerOpen(true);
 
   try {
@@ -142,28 +232,19 @@ async function organizeAll(): Promise<void> {
     const scan = await scanAllTabs();
     if (scan.total === 0) {
       const summary: OrganizeSummary = {
-        scanned: 0,
-        checked: 0,
-        snapshotted: 0,
-        excluded: 0,
-        closed: 0,
+        scanned: 0, checked: 0, snapshotted: 0, excluded: 0, closed: 0,
         durationMs: Date.now() - t0,
       };
       broadcast({ type: 'organize/done', summary });
+      await setSettings({ organizeInProgress: false, organizeStartedAt: 0 });
       return;
     }
 
-    broadcast({
-      type: 'organize/progress',
-      current: 0,
-      total: scan.total,
-      stage: 'checking',
-    });
+    broadcast({ type: 'organize/progress', current: 0, total: scan.total, stage: 'checking' });
     const checkResults = await checkBatch(
       scan.candidates.map((c) => c.url),
       { concurrency: 16, timeoutMs: 4000 },
       (done, total, lastUrl) => {
-        // 每完成一個 URL 廣播進度，讓 UI 看得到推進
         broadcast({
           type: 'organize/progress',
           current: done,
@@ -174,66 +255,57 @@ async function organizeAll(): Promise<void> {
       },
     );
 
-    const alive = [] as typeof scan.candidates;
-    const dead = [] as typeof scan.candidates;
+    const alive: TabCandidate[] = [];
+    const dead: TabCandidate[] = [];
     for (const c of scan.candidates) {
       const r = checkResults.get(c.url);
       if (r && r.ok) alive.push(c);
       else dead.push(c);
     }
 
+    // 寫剔除清單 + 立即關閉 dead tabs
     for (const d of dead) {
       const r = checkResults.get(d.url);
       await addExcluded({
-        url: d.url,
-        title: d.title,
-        domain: d.domain,
-        reason:
-          r?.status === 'timeout'
-            ? 'timeout'
-            : r?.status === 'network-error'
-              ? 'network-error'
-              : 'http-error',
+        url: d.url, title: d.title, domain: d.domain,
+        reason: r?.status === 'timeout' ? 'timeout'
+          : r?.status === 'network-error' ? 'network-error'
+          : 'http-error',
         ...(r?.status !== undefined ? { statusCode: r.status } : {}),
         excludedAt: Date.now(),
       });
     }
+    const closedDead = await closeTabs(dead.map((c) => c.tabId));
 
-    const snapResult = await snapshotTabs(alive, (info) => {
-      broadcast({
-        type: 'organize/progress',
-        current: info.current,
-        total: info.total,
-        stage: info.stage,
-        ...(info.currentTitle !== undefined ? { currentTitle: info.currentTitle } : {}),
-      });
-    });
+    // 建立 queue 給 chunk 處理
+    const queue: OrganizeQueue = {
+      alive,
+      archived: 0,
+      failed: 0,
+      excluded: dead.length,
+      closed: closedDead,
+      scanned: scan.total,
+      t0,
+    };
+    await setQueue(queue);
 
+    if (alive.length === 0) {
+      await finishOrganize(queue);
+      return;
+    }
+
+    // 啟動 chunk 處理（alarm handler 接手；本 invocation 結束）
     broadcast({
       type: 'organize/progress',
-      current: scan.total,
+      current: dead.length,
       total: scan.total,
-      stage: 'closing',
+      stage: 'snapshotting',
     });
-    // snapshot 階段已 close-as-you-go 關掉所有 alive tab；這裡只關 dead tabs
-    const closed =
-      snapResult.archivedCount + (await closeTabs(dead.map((c) => c.tabId)));
-
-    const summary: OrganizeSummary = {
-      scanned: scan.total,
-      checked: scan.total,
-      snapshotted: snapResult.archivedCount,
-      excluded: dead.length,
-      closed,
-      durationMs: Date.now() - t0,
-    };
-    broadcast({ type: 'archive/changed' });
-    broadcast({ type: 'organize/done', summary });
+    chrome.alarms.create(ORGANIZE_NEXT_CHUNK_ALARM, { delayInMinutes: 0.0017 });
   } catch (e) {
     broadcast({ type: 'organize/error', error: (e as Error).message });
-  } finally {
     await setSettings({ organizeInProgress: false, organizeStartedAt: 0 });
-    stopOrganizeKeepAlive();
+    await setQueue(null);
   }
 }
 
