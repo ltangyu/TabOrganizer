@@ -1,11 +1,8 @@
-# TabOrganizer desktop launcher (Chinese guide via HTML, no PS encoding issue)
+# TabOrganizer desktop launcher
 #
-# Behavior:
-#   - If extension is permanently installed in Default profile:
-#       opens manager as --app window in user's daily Chrome.
-#   - Otherwise:
-#       opens chrome://extensions + install-guide.html (Chinese) in
-#       new tabs of user's daily Chrome + dist folder in Explorer.
+# Detection: Chrome MV3 stores extension metadata in BOTH Preferences and
+# Secure Preferences. We must check both (Secure Preferences is the
+# primary store for unpacked extensions in modern Chrome).
 
 $EXT_ID = 'eanilmbkohdgpndehpbikchfpnaboloh'
 $MGR    = "chrome-extension://$EXT_ID/src/manager/manager.html"
@@ -22,23 +19,38 @@ foreach ($p in @(
 }
 if (-not $chrome) { exit 1 }
 
-# Detect install
-$installed = $false
-$prefPath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Preferences"
-if (Test-Path $prefPath) {
-    try {
-        $json = Get-Content $prefPath -Raw -Encoding UTF8
-        $installed = $json -match [Regex]::Escape("`"$EXT_ID`"")
-    } catch {}
+# Detect install across all standard profiles and both pref files
+function Test-ExtInstalled {
+    param([string]$ExtId)
+    $base = "$env:LOCALAPPDATA\Google\Chrome\User Data"
+    if (-not (Test-Path $base)) { return $false }
+
+    $profiles = Get-ChildItem $base -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^(Default|Profile \d+)$' }
+
+    foreach ($prof in $profiles) {
+        foreach ($fileName in @('Preferences', 'Secure Preferences')) {
+            $f = Join-Path $prof.FullName $fileName
+            if (Test-Path $f) {
+                try {
+                    $content = Get-Content $f -Raw -Encoding UTF8
+                    if ($content -match [Regex]::Escape($ExtId)) {
+                        return $true
+                    }
+                } catch {}
+            }
+        }
+    }
+    return $false
 }
 
-if ($installed) {
-    # Permanent install detected -- open manager as app window
+if (Test-ExtInstalled $EXT_ID) {
+    # Open manager as app window in user's daily Chrome
     Start-Process $chrome "--app=`"$MGR`""
     exit 0
 }
 
-# Not installed: open extensions page + Chinese install guide + dist folder
+# Not installed -- open extensions page + Chinese guide + dist folder
 $guideUri = (New-Object System.Uri($GUIDE)).AbsoluteUri
 Start-Process $chrome 'chrome://extensions/'
 Start-Sleep -Milliseconds 400
