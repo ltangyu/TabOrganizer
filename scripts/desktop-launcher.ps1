@@ -1,14 +1,17 @@
-# TabOrganizer desktop launcher -- zero-setup, loader-mediated
+# TabOrganizer desktop launcher -- zero-setup, service-worker-driven
 #
 # Strategy:
-#   1. Launch Chrome with --user-data-dir + --load-extension + --app=loader.html
-#   2. loader.html shows a TabOrganizer splash, polls until extension's
-#      service worker is ready, then replaces location with the manager URL.
-#   3. Single Chrome window from start to finish, no flicker, no error page.
+#   1. Launch Chrome with --user-data-dir + --load-extension (no --app).
+#   2. Chrome starts normally with a default new-tab window.
+#   3. Extension's service worker fires chrome.runtime.onStartup, which
+#      creates a popup-type window pointing at the manager, and closes
+#      the default new-tab window.
+#   4. User ends up with a single app-style window (no tabs, no address
+#      bar), driven entirely by the extension itself -- no file:// or
+#      --app= URLs that Chrome's security model rejects.
 
 $EXT_ID  = 'eanilmbkohdgpndehpbikchfpnaboloh'
 $DIST    = 'D:\Desktop\AI\MiniPrograms\TabOrganizer\dist'
-$LOADER  = 'D:\Desktop\AI\MiniPrograms\TabOrganizer\scripts\loader.html'
 $PROFILE = "$env:LOCALAPPDATA\TabOrganizer\ChromeProfile"
 
 # Find Chrome
@@ -29,18 +32,16 @@ if (-not $chrome) {
     exit 1
 }
 
-# Persistent profile so data survives across launches
+# Persistent profile dir
 if (-not (Test-Path $PROFILE)) {
     New-Item -ItemType Directory -Path $PROFILE -Force | Out-Null
 }
 
-# Convert local loader path to file:// URL
-$loaderUri = (New-Object System.Uri($LOADER)).AbsoluteUri
-
+# Launch: load extension; service worker opens manager popup + closes
+# the default Chrome window for an app-like single-window experience.
 Start-Process $chrome @(
     "--user-data-dir=`"$PROFILE`"",
     "--load-extension=`"$DIST`"",
     '--no-first-run',
-    '--no-default-browser-check',
-    "--app=`"$loaderUri`""
+    '--no-default-browser-check'
 )
