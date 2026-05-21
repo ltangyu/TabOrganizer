@@ -19,6 +19,27 @@ const counts = computed(() => {
   return m;
 });
 
+/**
+ * 排序規則：
+ * 1. 一般分類（非內建）在前：按項目數量多到少排序，多的更顯眼。
+ * 2. 內建分類（收件匣 等）排在後面，跟「未分類」一樣放在最右邊，
+ *    因為通常為空 / 是 fallback 容器，不該佔前排好位置。
+ */
+const regularCategories = computed(() =>
+  categories.categories
+    .filter((c) => !c.builtinKey)
+    .slice()
+    .sort((a, b) => {
+      const ca = counts.value.get(a.id ?? -1) ?? 0;
+      const cb = counts.value.get(b.id ?? -1) ?? 0;
+      return cb - ca;
+    }),
+);
+
+const builtinCategories = computed(() =>
+  categories.categories.filter((c) => !!c.builtinKey),
+);
+
 function select(id: number | null | 'all'): void {
   archive.filterCategoryId = id;
 }
@@ -44,9 +65,35 @@ function isActive(id: number | null | 'all'): boolean {
       HTML 規範下 button 把整塊視為單一可點區，內層 span 的 click handler
       不被瀏覽器一致認可 → 永遠觸發外層 button 的 select() 切換過濾。
       改：chip 跟 reopen-btn 並排成兄弟元素，用 wrapper 偵測 hover 切換顯示。
+
+      排序：一般分類（user/auto）依數量多到少在前；
+      內建（收件匣）+ 未分類 一起排在最後面。
     -->
     <div
-      v-for="c in categories.categories"
+      v-for="c in regularCategories"
+      :key="c.id"
+      class="cat-chip-wrap"
+    >
+      <button
+        class="cat-chip"
+        :class="{ active: isActive(c.id ?? null) }"
+        @click="select(c.id ?? null)"
+      >
+        <span class="cat-name">{{ categories.displayName(c) }}</span>
+        <span class="cat-count text-mono">{{ counts.get(c.id ?? -1) ?? 0 }}</span>
+      </button>
+      <button
+        v-if="(counts.get(c.id ?? -1) ?? 0) > 0 && !isActive(c.id ?? null)"
+        class="cat-reopen-btn"
+        @click="c.id != null && emit('reopen-category', c.id)"
+      >
+        {{ t('category.reopen') }}
+      </button>
+    </div>
+
+    <!-- 內建分類（收件匣 等）— 跟「未分類」一樣排最後 -->
+    <div
+      v-for="c in builtinCategories"
       :key="c.id"
       class="cat-chip-wrap"
     >
