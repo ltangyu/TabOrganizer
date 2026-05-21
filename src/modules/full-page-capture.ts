@@ -4,11 +4,19 @@
  * chrome.tabs.captureVisibleTab 只能截可見視窗大小；對於需要長截圖的歸檔
  * 用途，必須用 DevTools Protocol 的 Page.captureScreenshot + captureBeyondViewport。
  *
+ * 關鍵特性：chrome.debugger 在「背景 tab」也能截圖（無需 chrome.tabs.update 切 active），
+ * 這對 organize 流程非常重要 — 不會搶走管理頁焦點。
+ *
  * 副作用：執行期間目標 tab 會出現黃色「DevTools 正在偵錯」橫幅；attach/detach
  * 完成後自動消失。
+ *
+ * 防呆：所有 chrome.debugger 呼叫都包 timeout，避免單一 tab 掛住整個流程
+ * （例如 YouTube 播放器、無限滾動頁面、chrome.debugger 自己 hang）。
  */
 
 const DEBUGGER_VERSION = '1.3';
+const ATTACH_TIMEOUT_MS = 5_000;
+const COMMAND_TIMEOUT_MS = 15_000;
 
 export interface FullPageCaptureOpts {
   format?: 'jpeg' | 'png';
@@ -17,9 +25,28 @@ export interface FullPageCaptureOpts {
   maxHeight?: number;
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`${label} timeout after ${ms}ms`)),
+      ms,
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
 /**
  * 對指定 tab 抓全頁截圖，回傳 data URL。
- * 若 chrome.debugger 不可用或 attach 失敗，throw — 呼叫者應 fallback。
+ * 若 chrome.debugger 不可用、attach 失敗、或任一階段 timeout → throw，呼叫者應 fallback。
  */
 export async function captureFullPage(
   tabId: number,
@@ -29,12 +56,17 @@ export async function captureFullPage(
   const quality = opts.quality ?? 80;
   const maxHeight = opts.maxHeight ?? 16000;
 
-  await chrome.debugger.attach({ tabId }, DEBUGGER_VERSION);
+  await withTimeout(
+    chrome.debugger.attach({ tabId }, DEBUGGER_VERSION),
+    ATTACH_TIMEOUT_MS,
+    'debugger.attach',
+  );
 
   try {
     // 確認頁面 metric 不會超過 maxHeight，否則 clip 限縮
-    const layout = (await chrome.debugger.sendCommand(
-      { tabId },
+    const layout = (await withTimeout(
+      chrome.debugger.sendCommand({ tabId }, 'Page.getLayoutMetrics') as Promise<unknown>,
+      COMMAND_TIMEOUT_MS,
       'Page.getLayoutMetrics',
     )) as {
       cssContentSize?: { x: number; y: number; width: number; height: number };
@@ -62,10 +94,10 @@ export async function captureFullPage(
     };
     if (clip) params.clip = clip;
 
-    const result = (await chrome.debugger.sendCommand(
-      { tabId },
+    const result = (await withTimeout(
+      chrome.debugger.sendCommand({ tabId }, 'Page.captureScreenshot', params) as Promise<unknown>,
+      COMMAND_TIMEOUT_MS,
       'Page.captureScreenshot',
-      params,
     )) as { data: string };
 
     return `data:image/${format};base64,${result.data}`;

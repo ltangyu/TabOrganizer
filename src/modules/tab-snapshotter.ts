@@ -6,7 +6,7 @@ import { slugifyForFilename } from '@/utils/domain';
 import { addArchivedTab } from './archive-store';
 import { captureFullPage } from './full-page-capture';
 
-const SETTLE_DELAY_MS = 150;
+const FALLBACK_SETTLE_MS = 150;
 const THUMB_MAX_WIDTH = 512;
 
 export type SnapshotProgress = (info: {
@@ -23,6 +23,33 @@ export interface SnapshotOutcome {
   failedTabIds: number[];
 }
 
+/**
+ * 抓單一 tab 截圖：
+ * 1. 優先用 chrome.debugger 全頁截圖（背景 tab 也能截，不搶焦點，且有 timeout 保護）
+ * 2. 若 debugger 失敗才退而求其次：切 active + captureVisibleTab
+ *    這條 fallback 會打斷使用者操作（管理頁失焦），但只在 chrome.debugger
+ *    完全不可用時才會走（例如 chrome:// 內部頁、debugger 被其他 ext 佔用）
+ */
+async function captureTab(t: TabCandidate): Promise<string> {
+  try {
+    return await captureFullPage(t.tabId, {
+      format: 'jpeg',
+      quality: 80,
+      maxHeight: 16000,
+    });
+  } catch (debugErr) {
+    console.warn('[TabOrganizer] full-page capture failed, fallback', t.url, debugErr);
+    await chrome.tabs.update(t.tabId, { active: true });
+    // captureVisibleTab 需要視窗也是 focused，但管理頁通常在另一個視窗 ——
+    // 這裡盡量試試看，失敗就讓外層 catch 處理
+    await sleep(FALLBACK_SETTLE_MS);
+    return await chrome.tabs.captureVisibleTab(t.windowId, {
+      format: 'jpeg',
+      quality: 80,
+    });
+  }
+}
+
 export async function snapshotTabs(
   tabs: TabCandidate[],
   onProgress?: SnapshotProgress,
@@ -37,24 +64,7 @@ export async function snapshotTabs(
     const t = tabs[i]!;
     onProgress?.({ current: i + 1, total, stage: 'snapshotting', currentTitle: t.title });
     try {
-      await chrome.tabs.update(t.tabId, { active: true });
-      await sleep(SETTLE_DELAY_MS);
-
-      // 優先用 chrome.debugger 截整頁（含滾動範圍），失敗 fallback 到可見區
-      let dataUrl: string;
-      try {
-        dataUrl = await captureFullPage(t.tabId, {
-          format: 'jpeg',
-          quality: 80,
-          maxHeight: 16000,
-        });
-      } catch (debugErr) {
-        console.warn('[TabOrganizer] full-page capture failed, fallback', t.url, debugErr);
-        dataUrl = await chrome.tabs.captureVisibleTab(t.windowId, {
-          format: 'jpeg',
-          quality: 80,
-        });
-      }
+      const dataUrl = await captureTab(t);
 
       let thumbBlob: Blob | null = null;
       try {
@@ -105,6 +115,13 @@ export async function snapshotTabs(
       console.warn('[TabOrganizer] snapshot failed', t.url, e);
       failed++;
       failedTabIds.push(t.tabId);
+      // 使用者選了「一鍵整理」= 全部關閉。截不到的也關掉避免殘留佔記憶體。
+      // （URL 已在 scan 階段記錄；若需要可從 scan history 找回）
+      try {
+        await chrome.tabs.remove(t.tabId);
+      } catch {
+        /* 已被關閉或不存在 */
+      }
     }
   }
 

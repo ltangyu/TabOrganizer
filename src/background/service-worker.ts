@@ -164,21 +164,36 @@ async function finishOrganize(q: OrganizeQueue): Promise<void> {
 }
 
 async function processNextChunk(): Promise<void> {
+  // 安全網 alarm：30 秒後 fallback 觸發。
+  // 若本輪正常結束，會被結尾的 100ms 短 delay alarm 覆蓋（同 name → replace）。
+  // 若 SW 在 chunk 處理中途死掉，30 秒後此 alarm 仍會喚醒 SW 繼續下一輪 ——
+  // 避免「卡住」永遠不再前進。
+  chrome.alarms.create(ORGANIZE_NEXT_CHUNK_ALARM, { delayInMinutes: 0.5 });
+
   const q = await getQueue();
   if (!q) {
     // 沒有 queue → 清 flag 並退出
+    chrome.alarms.clear(ORGANIZE_NEXT_CHUNK_ALARM);
     await setSettings({ organizeInProgress: false, organizeStartedAt: 0 });
     return;
   }
 
   if (q.alive.length === 0) {
+    chrome.alarms.clear(ORGANIZE_NEXT_CHUNK_ALARM);
     await finishOrganize(q);
     return;
   }
 
-  // 處理下一個 chunk
+  // 把 chunk 從 queue splice 出來後立即存回。
+  // 重要：這 chunk 對應的 tabId 已從 queue 移除，若 SW 在處理中死掉，
+  // 這些 tab 算 lost（不會再嘗試），但 30s fallback alarm 會接著處理 queue 剩下的部分 ——
+  // 比讓整個流程卡住好。
   const chunk = q.alive.splice(0, ORGANIZE_CHUNK_SIZE);
+  await setQueue(q);
+
   const baseCurrent = q.archived + q.failed + q.excluded;
+  let chunkArchived = 0;
+  let chunkFailed = 0;
 
   try {
     const result = await snapshotTabs(chunk, (info) => {
@@ -190,23 +205,28 @@ async function processNextChunk(): Promise<void> {
         ...(info.currentTitle !== undefined ? { currentTitle: info.currentTitle } : {}),
       });
     });
-    q.archived += result.archivedCount;
-    q.failed += result.failedCount;
-    q.closed += result.archivedCount; // close-as-you-go
+    chunkArchived = result.archivedCount;
+    chunkFailed = result.failedCount;
   } catch (e) {
     console.warn('[TabOrganizer] chunk failed', e);
-    q.failed += chunk.length;
+    chunkFailed = chunk.length;
   }
 
-  await setQueue(q);
+  // 重讀 queue 合併計數（防止其他 chunk 同時寫入造成 lost update）
+  const q2 = (await getQueue()) ?? q;
+  q2.archived += chunkArchived;
+  q2.failed += chunkFailed;
+  // close-as-you-go：archived 與 failed 的 tab 都已被 snapshotter 關掉
+  q2.closed += chunkArchived + chunkFailed;
+  await setQueue(q2);
   broadcast({ type: 'archive/changed' });
 
-  if (q.alive.length > 0) {
-    // 排下一輪 — 注意：Chrome 對 alarms periodInMinutes 強制最低 30 秒，
-    // 但 delayInMinutes 可較短。0.0017 minutes = ~100ms。
+  if (q2.alive.length > 0) {
+    // 用 100ms 短 delay 覆蓋安全網 alarm，讓下一輪盡快開始
     chrome.alarms.create(ORGANIZE_NEXT_CHUNK_ALARM, { delayInMinutes: 0.0017 });
   } else {
-    await finishOrganize(q);
+    chrome.alarms.clear(ORGANIZE_NEXT_CHUNK_ALARM);
+    await finishOrganize(q2);
   }
 }
 
