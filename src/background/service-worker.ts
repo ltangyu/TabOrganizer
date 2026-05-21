@@ -82,10 +82,15 @@ chrome.runtime.onStartup.addListener(async () => {
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name !== ALARM_REVALIDATE) return;
-  const r = await runRevalidation();
-  broadcast({ type: 'revalidate/done', checked: r.checked, gone: r.gone });
-  broadcast({ type: 'archive/changed' });
+  if (alarm.name === KEEP_ALIVE_ALARM) {
+    // 純粹喚醒 SW 防 idle timeout，不做事
+    return;
+  }
+  if (alarm.name === ALARM_REVALIDATE) {
+    const r = await runRevalidation();
+    broadcast({ type: 'revalidate/done', checked: r.checked, gone: r.gone });
+    broadcast({ type: 'archive/changed' });
+  }
 });
 
 function broadcast(msg: RuntimeMessage): void {
@@ -106,6 +111,15 @@ function ensureManagerOpen(focusProgress = false): void {
   });
 }
 
+/** Keep-alive：在 organize 進行中每 25 秒 ping 一次 SW 防止 idle timeout suspend。 */
+const KEEP_ALIVE_ALARM = 'tab-organizer-keepalive';
+function startOrganizeKeepAlive(): void {
+  chrome.alarms.create(KEEP_ALIVE_ALARM, { periodInMinutes: 25 / 60 });
+}
+function stopOrganizeKeepAlive(): void {
+  chrome.alarms.clear(KEEP_ALIVE_ALARM);
+}
+
 async function organizeAll(): Promise<void> {
   // 先嘗試清除卡住的舊 flag（防 worker 卸載卡住）
   await clearStaleOrganizeFlag();
@@ -120,6 +134,7 @@ async function organizeAll(): Promise<void> {
   }
   const t0 = Date.now();
   await setSettings({ organizeInProgress: true, organizeStartedAt: t0 });
+  startOrganizeKeepAlive();
   ensureManagerOpen(true);
 
   try {
@@ -146,7 +161,7 @@ async function organizeAll(): Promise<void> {
     });
     const checkResults = await checkBatch(
       scan.candidates.map((c) => c.url),
-      { concurrency: 8, timeoutMs: 5000 },
+      { concurrency: 16, timeoutMs: 4000 },
       (done, total, lastUrl) => {
         // 每完成一個 URL 廣播進度，讓 UI 看得到推進
         broadcast({
@@ -200,11 +215,9 @@ async function organizeAll(): Promise<void> {
       total: scan.total,
       stage: 'closing',
     });
-    const closableIds = [
-      ...snapResult.archivedTabIds,
-      ...dead.map((c) => c.tabId),
-    ];
-    const closed = await closeTabs(closableIds);
+    // snapshot 階段已 close-as-you-go 關掉所有 alive tab；這裡只關 dead tabs
+    const closed =
+      snapResult.archivedCount + (await closeTabs(dead.map((c) => c.tabId)));
 
     const summary: OrganizeSummary = {
       scanned: scan.total,
@@ -220,6 +233,7 @@ async function organizeAll(): Promise<void> {
     broadcast({ type: 'organize/error', error: (e as Error).message });
   } finally {
     await setSettings({ organizeInProgress: false, organizeStartedAt: 0 });
+    stopOrganizeKeepAlive();
   }
 }
 

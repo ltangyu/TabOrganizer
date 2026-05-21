@@ -5,7 +5,7 @@ import { resizeToThumb } from '@/utils/image';
 import { slugifyForFilename } from '@/utils/domain';
 import { addArchivedTab } from './archive-store';
 
-const SETTLE_DELAY_MS = 250;
+const SETTLE_DELAY_MS = 150;
 const THUMB_MAX_WIDTH = 512;
 
 export type SnapshotProgress = (info: {
@@ -81,6 +81,14 @@ export async function snapshotTabs(
       await addArchivedTab(record);
       archived++;
       archivedTabIds.push(t.tabId);
+
+      // 截圖完立即關掉這個 tab（close-as-you-go）
+      // 這樣即使 SW 中途死掉，已處理的分頁不會殘留
+      try {
+        await chrome.tabs.remove(t.tabId);
+      } catch {
+        /* tab 可能已被使用者手動關閉 */
+      }
     } catch (e) {
       console.warn('[TabOrganizer] snapshot failed', t.url, e);
       failed++;
