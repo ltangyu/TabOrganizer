@@ -91,6 +91,8 @@
   "ctrl.organize.noTabs": "No tabs to organize",
   "toast.revalidate.done": "Revalidation complete",
   "toast.revalidate.format": "{checked} items, {gone} gone",
+  "toast.reopen.done": "Reopen",
+  "toast.reopen.format": "Opened {opened}, skipped {skipped} duplicates",
   "progress.stage.scanning": "Scanning tabs…",
   "progress.stage.checking": "Checking link health…",
   "progress.stage.snapshotting": "Snapshotting…",

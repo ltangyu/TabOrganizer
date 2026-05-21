@@ -69,11 +69,29 @@ async function pickCategory(id: number | null): Promise<void> {
 }
 
 async function reopenCategory(categoryId: number): Promise<void> {
-  await chrome.runtime.sendMessage({
+  console.log('[TabOrganizer] manager.reopenCategory clicked, id=', categoryId);
+  const resp = (await chrome.runtime.sendMessage({
     type: 'reopen/category',
     categoryId,
-  } satisfies RuntimeMessage);
+  } satisfies RuntimeMessage)) as
+    | { ok: boolean; opened?: number; skipped?: number }
+    | undefined;
+  console.log('[TabOrganizer] manager.reopenCategory response', resp);
+  if (resp && resp.ok && resp.opened !== undefined) {
+    reopenToast.value = {
+      opened: resp.opened,
+      skipped: resp.skipped ?? 0,
+      at: Date.now(),
+    };
+    setTimeout(() => {
+      if (reopenToast.value && Date.now() - reopenToast.value.at >= 4000) {
+        reopenToast.value = null;
+      }
+    }, 4500);
+  }
 }
+
+const reopenToast = ref<{ opened: number; skipped: number; at: number } | null>(null);
 
 let detach: (() => void) | null = null;
 
@@ -172,6 +190,15 @@ onBeforeUnmount(() => {
           {{ t('toast.revalidate.format', lastRevalidate) }}
         </span>
         <button class="btn-ghost-x" @click="lastRevalidate = null" :aria-label="t('modal.close')">×</button>
+      </div>
+    </Transition>
+    <Transition name="toast">
+      <div v-if="reopenToast" class="revalidate-toast glass-box">
+        <span class="label-micro">{{ t('toast.reopen.done') }}</span>
+        <span class="text-mono">
+          {{ t('toast.reopen.format', { opened: reopenToast.opened, skipped: reopenToast.skipped }) }}
+        </span>
+        <button class="btn-ghost-x" @click="reopenToast = null" :aria-label="t('modal.close')">×</button>
       </div>
     </Transition>
   </div>

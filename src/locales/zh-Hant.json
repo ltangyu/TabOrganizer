@@ -91,6 +91,8 @@
   "ctrl.organize.noTabs": "沒有可整理的分頁",
   "toast.revalidate.done": "重掃完成",
   "toast.revalidate.format": "{checked} 項，{gone} 項失效",
+  "toast.reopen.done": "重新開啟",
+  "toast.reopen.format": "已開啟 {opened} 個，跳過 {skipped} 個重複",
   "progress.stage.scanning": "掃描分頁中…",
   "progress.stage.checking": "檢查連結是否失效…",
   "progress.stage.snapshotting": "截圖中…",

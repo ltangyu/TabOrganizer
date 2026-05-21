@@ -4,7 +4,7 @@ import { scanAllTabs } from '@/modules/tab-scanner';
 import { checkBatch } from '@/modules/link-checker';
 import { snapshotTabs } from '@/modules/tab-snapshotter';
 import { closeTabs } from '@/modules/tab-closer';
-import { addExcluded, listCategories, createCategory } from '@/modules/archive-store';
+import { addExcluded, listCategories, createCategory, db } from '@/modules/archive-store';
 import { backfillUncategorized, loadCategoryState } from '@/modules/category-engine';
 import { findMissingTabs, reopenMissingTabs, saveOrganizeScanSnapshot } from '@/modules/recovery';
 import { openTabsSkipDuplicates } from '@/modules/tab-opener';
@@ -364,10 +364,18 @@ async function organizeAll(): Promise<void> {
 }
 
 async function reopenCategory(categoryId: number): Promise<{ opened: number; skipped: number }> {
-  const { db } = await import('@/modules/archive-store');
+  // 之前用 await import() 動態載入；換成 top-level 靜態 import 的 db 更穩。
   const items = await db.archives.where('categoryId').equals(categoryId).toArray();
+  console.log(
+    '[TabOrganizer] reopenCategory categoryId=',
+    categoryId,
+    'found archives=',
+    items.length,
+  );
   // 走 openTabsSkipDuplicates 自動跳過已開的 URL，避免重複分頁
-  return await openTabsSkipDuplicates(items.map((a) => a.url));
+  const result = await openTabsSkipDuplicates(items.map((a) => a.url));
+  console.log('[TabOrganizer] reopenCategory result', result);
+  return result;
 }
 
 chrome.runtime.onMessage.addListener((msg: RuntimeMessage, _sender, sendResponse) => {
