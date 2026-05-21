@@ -13,6 +13,63 @@ import { captureFullPage } from './full-page-capture';
  */
 const SETTLE_DELAY_MS = 400;
 const THUMB_MAX_WIDTH = 512;
+/** 整頁截圖上限高度（px）— 從 16000 降為 8000，避免 captureBeyondViewport
+ * 在無限滾動類頁面（Drive folder）卡住。 */
+const FULL_PAGE_MAX_HEIGHT = 8000;
+/** captureVisibleTab fallback 的 timeout（ms）— 避免某些 tab 連可視區截圖也 hang。 */
+const VISIBLE_CAPTURE_TIMEOUT_MS = 5_000;
+
+/**
+ * 已知會把 chrome.debugger Page.captureScreenshot {captureBeyondViewport:true}
+ * 拖到永遠不回的「重 SPA」清單。對這些 host 直接走 captureVisibleTab 跳過整頁截圖。
+ *
+ * - Drive folder：無限滾動 + lazy-load thumbnail，captureBeyondViewport 會一直
+ *   嘗試 scroll-load 全部檔案永遠不結束
+ * - Docs/Sheets/Slides：canvas-based 編輯區，captureBeyondViewport 行為怪異
+ * - Notion / Figma / Miro：類似情況
+ */
+const HEAVY_SPA_HOSTS = new Set([
+  'drive.google.com',
+  'docs.google.com',
+  'sheets.google.com',
+  'slides.google.com',
+  'notion.so',
+  'www.notion.so',
+  'figma.com',
+  'www.figma.com',
+  'miro.com',
+]);
+
+function shouldSkipFullPage(url: string): boolean {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    if (HEAVY_SPA_HOSTS.has(host)) return true;
+    // 涵蓋子網域，如 docs.google.com → google docs
+    for (const h of HEAVY_SPA_HOSTS) {
+      if (host.endsWith('.' + h)) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
 
 export type SnapshotProgress = (info: {
   current: number;
@@ -52,19 +109,30 @@ async function captureTab(t: TabCandidate): Promise<string> {
   }
   await sleep(SETTLE_DELAY_MS);
 
+  // 對已知重 SPA（Drive folder 等）直接走 captureVisibleTab，
+  // 跳過會 hang 的 chrome.debugger captureBeyondViewport。
+  if (shouldSkipFullPage(t.url)) {
+    return await withTimeout(
+      chrome.tabs.captureVisibleTab(t.windowId, { format: 'jpeg', quality: 80 }),
+      VISIBLE_CAPTURE_TIMEOUT_MS,
+      'captureVisibleTab(heavy-spa)',
+    );
+  }
+
   try {
     return await captureFullPage(t.tabId, {
       format: 'jpeg',
       quality: 80,
-      maxHeight: 16000,
+      maxHeight: FULL_PAGE_MAX_HEIGHT,
     });
   } catch (debugErr) {
     console.warn('[TabOrganizer] full-page capture failed, fallback', t.url, debugErr);
-    // tab 已 active，直接 captureVisibleTab 抓可視區
-    return await chrome.tabs.captureVisibleTab(t.windowId, {
-      format: 'jpeg',
-      quality: 80,
-    });
+    // tab 已 active，直接 captureVisibleTab 抓可視區（包 timeout 避免它也 hang）
+    return await withTimeout(
+      chrome.tabs.captureVisibleTab(t.windowId, { format: 'jpeg', quality: 80 }),
+      VISIBLE_CAPTURE_TIMEOUT_MS,
+      'captureVisibleTab(fallback)',
+    );
   }
 }
 

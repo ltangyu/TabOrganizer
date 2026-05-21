@@ -15,8 +15,11 @@
  */
 
 const DEBUGGER_VERSION = '1.3';
-const ATTACH_TIMEOUT_MS = 5_000;
-const COMMAND_TIMEOUT_MS = 15_000;
+const ATTACH_TIMEOUT_MS = 3_000;
+// 從 15s 縮短到 6s — 對於會 hang 的頁面（Drive folder、無限滾動等）
+// 等 15s 才放棄太慢；6s 已涵蓋絕大多數正常頁面的截圖時間，
+// 偶爾真的需要更久的就讓它落入 fallback captureVisibleTab。
+const COMMAND_TIMEOUT_MS = 6_000;
 
 export interface FullPageCaptureOpts {
   format?: 'jpeg' | 'png';
