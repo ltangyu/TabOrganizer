@@ -19,8 +19,7 @@ export default defineManifest({
     'alarms',
     'tabGroups',
     'debugger',
-    'sessions', // 抓 chrome.sessions.getRecentlyClosed 給「比對遺失分頁」用
-    'history',  // 用 chrome.history.search 比對遺失分頁（涵蓋 > sessions 上限的 25）
+    'sessions', // chrome.sessions.getRecentlyClosed 給「比對遺失分頁」fallback 用
   ],
   host_permissions: ['<all_urls>'],
   background: {

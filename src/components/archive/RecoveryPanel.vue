@@ -12,20 +12,9 @@ const emit = defineEmits<{ close: [] }>();
 const { t } = useI18n();
 
 const missing = ref<MissingTab[]>([]);
-const selected = ref<Set<string>>(new Set());
 const scanning = ref(false);
 const reopening = ref(false);
-const hoursBack = ref<number>(4);
 const lastOpenedCount = ref<number | null>(null);
-
-const hoursOptions = [
-  { value: 1, label: t('recover.range.hours', { n: 1 }) },
-  { value: 4, label: t('recover.range.hours', { n: 4 }) },
-  { value: 12, label: t('recover.range.hours', { n: 12 }) },
-  { value: 24, label: t('recover.range.day') },
-  { value: 72, label: t('recover.range.days', { n: 3 }) },
-  { value: 168, label: t('recover.range.days', { n: 7 }) },
-];
 
 async function scan(): Promise<void> {
   scanning.value = true;
@@ -33,52 +22,27 @@ async function scan(): Promise<void> {
   try {
     const resp = (await chrome.runtime.sendMessage({
       type: 'recover/scan',
-      historyHoursAgo: hoursBack.value,
     } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
     if (resp?.type === 'recover/scan-response') {
       missing.value = resp.missing;
-      // 預設全選 session 來源（精準），不選 history（噪音多）
-      selected.value = new Set(
-        resp.missing.filter((m: MissingTab) => m.source === 'session').map((m: MissingTab) => m.url),
-      );
     }
   } finally {
     scanning.value = false;
   }
 }
 
-function toggle(url: string): void {
-  if (selected.value.has(url)) {
-    selected.value.delete(url);
-  } else {
-    selected.value.add(url);
-  }
-  // trigger reactivity
-  selected.value = new Set(selected.value);
-}
-
-function selectAll(): void {
-  selected.value = new Set(missing.value.map((m) => m.url));
-}
-
-function clearSelection(): void {
-  selected.value = new Set();
-}
-
-async function reopen(): Promise<void> {
-  if (selected.value.size === 0) return;
+async function restoreAll(): Promise<void> {
+  if (missing.value.length === 0) return;
   reopening.value = true;
   try {
-    const urls = Array.from(selected.value);
+    const urls = missing.value.map((m) => m.url);
     const resp = (await chrome.runtime.sendMessage({
       type: 'recover/reopen',
       urls,
     } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
     if (resp?.type === 'recover/reopen-response') {
       lastOpenedCount.value = resp.opened;
-      // 已開啟的從 selected 移除
-      selected.value = new Set();
-      // 重新掃描，已開的 URL 應該從清單消失（因為現在 known 集合包含它了）
+      // 開完重新掃，已開的 URL 應該消失
       await scan();
     }
   } finally {
@@ -89,28 +53,27 @@ async function reopen(): Promise<void> {
 watch(
   () => props.open,
   (v) => {
-    if (v) scan();
-    else {
+    if (v) {
+      scan(); // 開啟視窗就自動掃
+    } else {
       missing.value = [];
-      selected.value = new Set();
       lastOpenedCount.value = null;
     }
   },
 );
 
-const summary = computed(() =>
-  missing.value.length === 0
-    ? null
-    : t('recover.found', { n: missing.value.length }),
-);
-
-const selectedSummary = computed(() =>
-  selected.value.size > 0 ? t('recover.selected', { n: selected.value.size }) : '',
-);
-
 function sourceLabel(source: MissingTab['source']): string {
-  return source === 'session' ? t('recover.source.session') : t('recover.source.history');
+  return source === 'organize-snapshot'
+    ? t('recover.source.snapshot')
+    : t('recover.source.session');
 }
+
+const snapshotCount = computed(
+  () => missing.value.filter((m) => m.source === 'organize-snapshot').length,
+);
+const sessionCount = computed(
+  () => missing.value.filter((m) => m.source === 'session').length,
+);
 </script>
 
 <template>
@@ -118,44 +81,38 @@ function sourceLabel(source: MissingTab['source']): string {
     <div class="recover">
       <p class="intro text-muted">{{ t('recover.intro') }}</p>
 
-      <div class="controls">
-        <div class="range">
-          <label class="label-micro">{{ t('recover.range') }}</label>
-          <select v-model.number="hoursBack" class="select" @change="scan">
-            <option v-for="o in hoursOptions" :key="o.value" :value="o.value">
-              {{ o.label }}
-            </option>
-          </select>
+      <!-- 結果區：載入中 / 找到 N / 空 -->
+      <div v-if="scanning" class="loading-row">
+        <span class="text-muted">{{ t('recover.scanning') }}</span>
+      </div>
+
+      <div v-else-if="missing.length === 0" class="empty-row">
+        <span class="text-muted">{{ t('recover.empty') }}</span>
+        <button class="btn btn-sm" @click="scan">{{ t('recover.scan') }}</button>
+      </div>
+
+      <div v-else class="summary-row">
+        <div class="counts">
+          <span class="big-count">{{ missing.length }}</span>
+          <span class="text-muted">{{ t('recover.found.suffix') }}</span>
         </div>
-        <button class="btn" @click="scan" :disabled="scanning">
-          {{ scanning ? t('recover.scanning') : t('recover.scan') }}
-        </button>
-        <div class="spacer" />
-        <span v-if="summary" class="text-mono summary">{{ summary }}</span>
+        <div class="breakdown text-muted label-micro">
+          <span v-if="snapshotCount > 0">
+            {{ t('recover.breakdown.snapshot', { n: snapshotCount }) }}
+          </span>
+          <span v-if="sessionCount > 0">
+            {{ t('recover.breakdown.session', { n: sessionCount }) }}
+          </span>
+        </div>
       </div>
 
       <div v-if="lastOpenedCount !== null" class="opened-toast">
         {{ t('recover.reopened', { n: lastOpenedCount }) }}
       </div>
 
-      <p v-if="missing.length > 0" class="warning text-muted label-micro">
-        {{ t('recover.warning') }}
-      </p>
-
-      <div v-if="missing.length === 0 && !scanning" class="empty text-muted">
-        {{ t('recover.empty') }}
-      </div>
-
-      <table v-else-if="missing.length > 0" class="recover-table">
+      <table v-if="missing.length > 0" class="recover-table">
         <thead>
           <tr>
-            <th class="col-check">
-              <input
-                type="checkbox"
-                :checked="selected.size === missing.length && missing.length > 0"
-                @change="selected.size === missing.length ? clearSelection() : selectAll()"
-              />
-            </th>
             <th>{{ t('recover.col.title') }}</th>
             <th>{{ t('recover.col.domain') }}</th>
             <th>{{ t('recover.col.source') }}</th>
@@ -163,19 +120,7 @@ function sourceLabel(source: MissingTab['source']): string {
           </tr>
         </thead>
         <tbody>
-          <tr
-            v-for="m in missing"
-            :key="m.url"
-            :class="{ selected: selected.has(m.url) }"
-            @click="toggle(m.url)"
-          >
-            <td class="col-check">
-              <input
-                type="checkbox"
-                :checked="selected.has(m.url)"
-                @click.stop="toggle(m.url)"
-              />
-            </td>
+          <tr v-for="m in missing" :key="m.url">
             <td class="text-truncate">
               <div class="title-line">
                 <img v-if="m.favIconUrl" :src="m.favIconUrl" class="favicon" alt="" />
@@ -196,20 +141,20 @@ function sourceLabel(source: MissingTab['source']): string {
     </div>
 
     <template #footer>
-      <span class="text-mono text-muted">{{ selectedSummary }}</span>
+      <button class="btn" @click="scan" :disabled="scanning || reopening">
+        {{ scanning ? t('recover.scanning') : t('recover.rescan') }}
+      </button>
       <div class="footer-spacer" />
-      <button class="btn" @click="clearSelection" :disabled="selected.size === 0">
-        {{ t('recover.clearSelection') }}
-      </button>
-      <button class="btn" @click="selectAll" :disabled="missing.length === 0">
-        {{ t('recover.selectAll') }}
-      </button>
       <button
         class="btn btn-primary"
-        @click="reopen"
-        :disabled="selected.size === 0 || reopening"
+        @click="restoreAll"
+        :disabled="missing.length === 0 || reopening || scanning"
       >
-        {{ reopening ? t('recover.reopening') : t('recover.reopen') }}
+        {{
+          reopening
+            ? t('recover.reopening')
+            : t('recover.restoreAll', { n: missing.length })
+        }}
       </button>
     </template>
   </ModalShell>
@@ -217,37 +162,48 @@ function sourceLabel(source: MissingTab['source']): string {
 
 <style scoped>
 .recover {
-  min-width: 820px;
+  min-width: 760px;
   max-width: 1100px;
 }
 .intro {
   font-size: var(--text-sm);
   margin-bottom: var(--gap-4);
+  line-height: 1.5;
 }
-.controls {
+.loading-row,
+.empty-row {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--gap-3);
-  margin-bottom: var(--gap-4);
+  padding: var(--gap-5);
+  font-size: var(--text-sm);
 }
-.controls .range {
+.summary-row {
   display: flex;
-  align-items: center;
+  align-items: baseline;
+  gap: var(--gap-4);
+  margin-bottom: var(--gap-3);
+  padding: var(--gap-3);
+  background: var(--bg-surface);
+  border: 0.5px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+.counts {
+  display: flex;
+  align-items: baseline;
   gap: var(--gap-2);
 }
-.controls .select {
-  font-size: var(--text-sm);
-  padding: 4px 8px;
-  background: var(--bg-surface);
-  border: 0.5px solid var(--border-medium);
-  border-radius: var(--radius-sm);
+.big-count {
+  font-size: 28px;
+  font-weight: 600;
+  font-family: var(--font-mono);
   color: var(--text-primary);
+  line-height: 1;
 }
-.controls .spacer {
-  flex: 1;
-}
-.controls .summary {
-  font-size: var(--text-sm);
+.breakdown {
+  display: flex;
+  gap: var(--gap-3);
 }
 .opened-toast {
   font-size: var(--text-sm);
@@ -257,13 +213,6 @@ function sourceLabel(source: MissingTab['source']): string {
   border: 0.5px solid var(--status-ok);
   color: var(--text-primary);
   margin-bottom: var(--gap-3);
-}
-.warning {
-  margin-bottom: var(--gap-3);
-}
-.empty {
-  padding: var(--gap-5);
-  text-align: center;
 }
 .recover-table {
   width: 100%;
@@ -288,17 +237,6 @@ function sourceLabel(source: MissingTab['source']): string {
   border-bottom: 0.5px solid var(--border-subtle);
   max-width: 320px;
   vertical-align: top;
-  cursor: pointer;
-}
-.recover-table tr:hover td {
-  background: var(--bg-hover);
-}
-.recover-table tr.selected td {
-  background: var(--bg-surface);
-}
-.col-check {
-  width: 32px;
-  text-align: center;
 }
 .title-line {
   display: flex;
@@ -331,10 +269,11 @@ function sourceLabel(source: MissingTab['source']): string {
   border: 0.5px solid var(--border-subtle);
   background: var(--bg-surface);
 }
-.source-pill.session {
+.source-pill.organize-snapshot {
   border-color: var(--status-ok);
+  font-weight: 600;
 }
-.source-pill.history {
+.source-pill.session {
   color: var(--text-muted);
 }
 .footer-spacer {

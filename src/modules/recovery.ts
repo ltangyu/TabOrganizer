@@ -1,18 +1,23 @@
 /**
  * 「比對還原遺失分頁」模組。
  *
- * 用途：找出「曾經開過但既沒在 archive、也沒在 excluded、也沒在現在開著的 tab」
- * 的 URL，讓使用者一鍵重開回來。
+ * 用途：找出「曾經 organize 想處理但既沒在 archive、也沒在 excluded、也沒在現在
+ * 開著的 tab」的 URL，讓使用者一鍵重開回來。
  *
- * 兩個資料來源：
- * 1. chrome.sessions.getRecentlyClosed（最多 25 筆，但精準 — 一定是被關掉的 tab）
- * 2. chrome.history.search（廣，可往前找 N 小時；噪音較多但覆蓋率高）
+ * 資料來源（優先序）：
+ * 1. lastOrganizeScan（chrome.storage）— 整理開始時 snapshot 的完整候選清單
+ *    精準度 100%，是「真正被 organize 操作但沒成功歸檔」的 URL
+ * 2. chrome.sessions.getRecentlyClosed — fallback，最多 25 筆
+ *    只用在「沒有 snapshot」（譬如本次升級前的舊損失）的情況
  *
- * 兩者結果 union + dedup，按 lastVisitTime 排序。
+ * 刻意不用 chrome.history — 噪音太多（任何近期造訪都會列入），
+ * 不是「真正被關掉但沒歸檔」的精準訊號。
  */
 
 import { db } from './archive-store';
 import { extractDomain, isInternalUrl } from '@/utils/domain';
+
+export const LAST_ORGANIZE_SCAN_KEY = 'tabOrganizer.lastOrganizeScan';
 
 export interface MissingTab {
   url: string;
@@ -21,16 +26,15 @@ export interface MissingTab {
   favIconUrl?: string;
   /** ms epoch；越大越新 */
   lastVisitTime?: number;
-  source: 'session' | 'history';
+  source: 'organize-snapshot' | 'session';
 }
 
-export interface RecoveryScanOptions {
-  /** 從多少小時前的 history 抓資料；預設 4 */
-  historyHoursAgo?: number;
-  /** 從 sessions 最多抓幾筆；預設 25（chrome 上限） */
-  sessionMax?: number;
-  /** history 最多抓幾筆；預設 5000 */
-  historyMax?: number;
+export interface SavedScanCandidate {
+  url: string;
+  title: string;
+  domain: string;
+  favIconUrl?: string;
+  scannedAt: number;
 }
 
 /**
@@ -48,13 +52,31 @@ function normalizeUrl(url: string): string {
   }
 }
 
-export async function findMissingTabs(
-  opts: RecoveryScanOptions = {},
-): Promise<MissingTab[]> {
-  const hoursAgo = opts.historyHoursAgo ?? 4;
-  const sessionMax = opts.sessionMax ?? 25;
-  const historyMax = opts.historyMax ?? 5000;
+/**
+ * 由 organize 流程在「scan 完、開始 check 前」呼叫。
+ * 把當下所有候選 URL 持久化，之後即使 SW 死光、queue 也清空，
+ * 只要 chrome.storage 還在，這份清單就能用來比對哪些 URL「應該被處理但沒進 archive」。
+ */
+export async function saveOrganizeScanSnapshot(
+  candidates: Array<{ url: string; title: string; domain: string; favIconUrl?: string }>,
+): Promise<void> {
+  const now = Date.now();
+  const saved: SavedScanCandidate[] = candidates.map((c) => ({
+    url: c.url,
+    title: c.title,
+    domain: c.domain,
+    ...(c.favIconUrl ? { favIconUrl: c.favIconUrl } : {}),
+    scannedAt: now,
+  }));
+  await chrome.storage.local.set({ [LAST_ORGANIZE_SCAN_KEY]: saved });
+}
 
+async function getOrganizeScanSnapshot(): Promise<SavedScanCandidate[]> {
+  const r = (await chrome.storage.local.get(LAST_ORGANIZE_SCAN_KEY))[LAST_ORGANIZE_SCAN_KEY];
+  return Array.isArray(r) ? (r as SavedScanCandidate[]) : [];
+}
+
+export async function findMissingTabs(): Promise<MissingTab[]> {
   // 1. 取已知 URL 集合（archive、excluded、目前開著）
   const [archives, excluded, openTabs] = await Promise.all([
     db.archives.toArray(),
@@ -71,12 +93,27 @@ export async function findMissingTabs(
 
   const missing = new Map<string, MissingTab>();
 
-  // 2. 從 chrome.sessions 撈最近關閉的 tab
+  // 2. 主要來源：上次 organize 的 snapshot（精準）
+  const snapshot = await getOrganizeScanSnapshot();
+  for (const s of snapshot) {
+    if (!s.url || isInternalUrl(s.url)) continue;
+    const norm = normalizeUrl(s.url);
+    if (known.has(norm)) continue;
+    missing.set(norm, {
+      url: s.url,
+      title: s.title,
+      domain: s.domain,
+      ...(s.favIconUrl ? { favIconUrl: s.favIconUrl } : {}),
+      lastVisitTime: s.scannedAt,
+      source: 'organize-snapshot',
+    });
+  }
+
+  // 3. Fallback：chrome.sessions（給「沒 snapshot」的舊損失用）
   if (chrome.sessions?.getRecentlyClosed) {
     try {
-      const sessions = await chrome.sessions.getRecentlyClosed({ maxResults: sessionMax });
+      const sessions = await chrome.sessions.getRecentlyClosed({ maxResults: 25 });
       for (const s of sessions) {
-        // session 可能是單一 tab 或整個 window 含多 tab
         const tabsInSession: chrome.tabs.Tab[] = [];
         if (s.tab) tabsInSession.push(s.tab);
         if (s.window?.tabs) tabsInSession.push(...s.window.tabs);
@@ -97,32 +134,6 @@ export async function findMissingTabs(
       }
     } catch (e) {
       console.warn('[TabOrganizer] sessions.getRecentlyClosed failed', e);
-    }
-  }
-
-  // 3. 從 chrome.history 撈最近 N 小時的瀏覽紀錄
-  if (chrome.history?.search) {
-    try {
-      const startTime = Date.now() - hoursAgo * 3600 * 1000;
-      const history = await chrome.history.search({
-        text: '',
-        startTime,
-        maxResults: historyMax,
-      });
-      for (const h of history) {
-        if (!h.url || isInternalUrl(h.url)) continue;
-        const norm = normalizeUrl(h.url);
-        if (known.has(norm) || missing.has(norm)) continue;
-        missing.set(norm, {
-          url: h.url,
-          title: h.title || h.url,
-          domain: extractDomain(h.url),
-          ...(h.lastVisitTime ? { lastVisitTime: h.lastVisitTime } : {}),
-          source: 'history',
-        });
-      }
-    } catch (e) {
-      console.warn('[TabOrganizer] history.search failed', e);
     }
   }
 

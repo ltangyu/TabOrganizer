@@ -14,7 +14,7 @@ export type RuntimeMessage =
   | { type: 'revalidate/run' }
   | { type: 'revalidate/done'; checked: number; gone: number }
   | { type: 'reopen/category'; categoryId: number }
-  | { type: 'recover/scan'; historyHoursAgo?: number }
+  | { type: 'recover/scan' }
   | { type: 'recover/scan-response'; missing: MissingTab[] }
   | { type: 'recover/reopen'; urls: string[] }
   | { type: 'recover/reopen-response'; opened: number };

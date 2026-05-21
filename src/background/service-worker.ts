@@ -6,7 +6,7 @@ import { snapshotTabs } from '@/modules/tab-snapshotter';
 import { closeTabs } from '@/modules/tab-closer';
 import { addExcluded, listCategories, createCategory } from '@/modules/archive-store';
 import { backfillUncategorized, loadCategoryState } from '@/modules/category-engine';
-import { findMissingTabs, reopenMissingTabs } from '@/modules/recovery';
+import { findMissingTabs, reopenMissingTabs, saveOrganizeScanSnapshot } from '@/modules/recovery';
 import {
   ALARM_REVALIDATE,
   DEFAULT_INTERVAL_MIN,
@@ -255,6 +255,22 @@ async function organizeAll(): Promise<void> {
     // autoCreateCategories: true → 對每個沒匹配規則的 domain 自動建立 category + rule
     // 這樣 412 個 tab 會依 base domain 自動歸類，而非全部塞進「未分類」
     const scan = await scanAllTabs({ autoCreateCategories: true });
+
+    // 立刻 snapshot 候選 URL 清單到 chrome.storage —
+    // 即使後面 SW 死光、queue 也被清，這份 snapshot 仍會留著，
+    // 「比對遺失」功能可用它計算「掃進來但沒成功歸檔」的精準清單。
+    try {
+      await saveOrganizeScanSnapshot(
+        scan.candidates.map((c) => ({
+          url: c.url,
+          title: c.title,
+          domain: c.domain,
+          ...(c.favIconUrl ? { favIconUrl: c.favIconUrl } : {}),
+        })),
+      );
+    } catch (e) {
+      console.warn('[TabOrganizer] saveOrganizeScanSnapshot failed', e);
+    }
     // 回填：對舊有 categoryId == null 的 archive，用新建立的規則重新歸類
     // （讓使用者之前 organize 但沒分類的紀錄也自動歸到對應分類）
     try {
@@ -395,9 +411,7 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage, _sender, sendResponse
       return;
     }
     if (msg.type === 'recover/scan') {
-      const missing = await findMissingTabs({
-        ...(msg.historyHoursAgo !== undefined ? { historyHoursAgo: msg.historyHoursAgo } : {}),
-      });
+      const missing = await findMissingTabs();
       sendResponse({ type: 'recover/scan-response', missing });
       return;
     }
