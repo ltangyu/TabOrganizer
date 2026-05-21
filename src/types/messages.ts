@@ -17,7 +17,7 @@ export type RuntimeMessage =
   | { type: 'recover/scan' }
   | { type: 'recover/scan-response'; missing: MissingTab[] }
   | { type: 'recover/reopen'; urls: string[] }
-  | { type: 'recover/reopen-response'; opened: number };
+  | { type: 'recover/reopen-response'; opened: number; skipped: number };
 
 export type ProgressStage = 'scanning' | 'checking' | 'snapshotting' | 'closing' | 'done';
 

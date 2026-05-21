@@ -18,6 +18,7 @@ import { useProgressStore } from '@/stores/progress';
 import { useUiPrefsStore } from '@/stores/ui-prefs';
 import { useI18n } from '@/composables/i18n';
 import { searchArchives } from '@/modules/search-engine';
+import { openOrFocusTab } from '@/modules/tab-opener';
 import type { ArchivedTab } from '@/types/archive';
 import type { RuntimeMessage } from '@/types/messages';
 
@@ -46,7 +47,8 @@ async function onOrganize(): Promise<void> {
 }
 
 async function openItem(item: ArchivedTab): Promise<void> {
-  await chrome.tabs.create({ url: item.url });
+  // 若 URL 已在某 tab 開著 → 切過去 + focus；否則開新 tab
+  await openOrFocusTab(item.url);
 }
 
 async function removeItem(item: ArchivedTab): Promise<void> {

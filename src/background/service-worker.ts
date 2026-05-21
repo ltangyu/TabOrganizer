@@ -7,6 +7,7 @@ import { closeTabs } from '@/modules/tab-closer';
 import { addExcluded, listCategories, createCategory } from '@/modules/archive-store';
 import { backfillUncategorized, loadCategoryState } from '@/modules/category-engine';
 import { findMissingTabs, reopenMissingTabs, saveOrganizeScanSnapshot } from '@/modules/recovery';
+import { openTabsSkipDuplicates } from '@/modules/tab-opener';
 import {
   ALARM_REVALIDATE,
   DEFAULT_INTERVAL_MIN,
@@ -362,12 +363,11 @@ async function organizeAll(): Promise<void> {
   }
 }
 
-async function reopenCategory(categoryId: number): Promise<void> {
+async function reopenCategory(categoryId: number): Promise<{ opened: number; skipped: number }> {
   const { db } = await import('@/modules/archive-store');
   const items = await db.archives.where('categoryId').equals(categoryId).toArray();
-  for (const a of items) {
-    chrome.tabs.create({ url: a.url, active: false });
-  }
+  // 走 openTabsSkipDuplicates 自動跳過已開的 URL，避免重複分頁
+  return await openTabsSkipDuplicates(items.map((a) => a.url));
 }
 
 chrome.runtime.onMessage.addListener((msg: RuntimeMessage, _sender, sendResponse) => {
@@ -406,8 +406,8 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage, _sender, sendResponse
       return;
     }
     if (msg.type === 'reopen/category') {
-      await reopenCategory(msg.categoryId);
-      sendResponse({ ok: true });
+      const r = await reopenCategory(msg.categoryId);
+      sendResponse({ ok: true, opened: r.opened, skipped: r.skipped });
       return;
     }
     if (msg.type === 'recover/scan') {
@@ -416,8 +416,8 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage, _sender, sendResponse
       return;
     }
     if (msg.type === 'recover/reopen') {
-      const opened = await reopenMissingTabs(msg.urls);
-      sendResponse({ type: 'recover/reopen-response', opened });
+      const { opened, skipped } = await reopenMissingTabs(msg.urls);
+      sendResponse({ type: 'recover/reopen-response', opened, skipped });
       return;
     }
     sendResponse({ ok: false });

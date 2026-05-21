@@ -15,6 +15,7 @@ const missing = ref<MissingTab[]>([]);
 const scanning = ref(false);
 const reopening = ref(false);
 const lastOpenedCount = ref<number | null>(null);
+const lastSkippedCount = ref<number>(0);
 
 async function scan(): Promise<void> {
   scanning.value = true;
@@ -42,6 +43,7 @@ async function restoreAll(): Promise<void> {
     } satisfies RuntimeMessage)) as RuntimeMessage | undefined;
     if (resp?.type === 'recover/reopen-response') {
       lastOpenedCount.value = resp.opened;
+      lastSkippedCount.value = resp.skipped;
       // 開完重新掃，已開的 URL 應該消失
       await scan();
     }
@@ -108,6 +110,9 @@ const sessionCount = computed(
 
       <div v-if="lastOpenedCount !== null" class="opened-toast">
         {{ t('recover.reopened', { n: lastOpenedCount }) }}
+        <span v-if="lastSkippedCount > 0" class="text-muted">
+          ｜ {{ t('recover.skipped', { n: lastSkippedCount }) }}
+        </span>
       </div>
 
       <table v-if="missing.length > 0" class="recover-table">

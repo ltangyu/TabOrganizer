@@ -167,5 +167,6 @@
   "recover.breakdown.session": "{n} from Chrome recently-closed",
   "recover.restoreAll": "Restore all ({n})",
   "recover.reopening": "Opening…",
-  "recover.reopened": "Opened {n} tabs"
+  "recover.reopened": "Opened {n} tabs",
+  "recover.skipped": "Skipped {n} (already open or duplicate)"
 }

@@ -16,6 +16,8 @@
 
 import { db } from './archive-store';
 import { extractDomain, isInternalUrl } from '@/utils/domain';
+import { normalizeUrl } from '@/utils/url';
+import { openTabsSkipDuplicates, type OpenBatchResult } from './tab-opener';
 
 export const LAST_ORGANIZE_SCAN_KEY = 'tabOrganizer.lastOrganizeScan';
 
@@ -35,21 +37,6 @@ export interface SavedScanCandidate {
   domain: string;
   favIconUrl?: string;
   scannedAt: number;
-}
-
-/**
- * URL 標準化（給 dedup 用）：去掉 fragment、結尾斜線。
- * 不去 querystring（同站不同 query 可能是不同頁面）。
- */
-function normalizeUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    let path = u.pathname.replace(/\/+$/, '');
-    if (!path) path = '/';
-    return u.protocol + '//' + u.host + path + u.search;
-  } catch {
-    return url;
-  }
 }
 
 /**
@@ -144,18 +131,9 @@ export async function findMissingTabs(): Promise<MissingTab[]> {
 }
 
 /**
- * 把選中的 URL 一次性開回來（背景 tab，避免搶焦點）。
- * 回傳實際開啟的數量。
+ * 把選中的 URL 一次性開回來（背景 tab + 自動跳過已開的）。
+ * 走共用 openTabsSkipDuplicates，所以重複的 URL（同清單內或已開的）都不會建分頁。
  */
-export async function reopenMissingTabs(urls: string[]): Promise<number> {
-  let opened = 0;
-  for (const url of urls) {
-    try {
-      await chrome.tabs.create({ url, active: false });
-      opened++;
-    } catch (e) {
-      console.warn('[TabOrganizer] reopen failed', url, e);
-    }
-  }
-  return opened;
+export async function reopenMissingTabs(urls: string[]): Promise<OpenBatchResult> {
+  return await openTabsSkipDuplicates(urls);
 }
