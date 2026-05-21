@@ -1,18 +1,15 @@
-# TabOrganizer desktop launcher -- zero-setup version
+# TabOrganizer desktop launcher -- zero-setup, loader-mediated
 #
-# Always launches Chrome with:
-#   --user-data-dir = persistent dedicated profile (so data survives across launches)
-#   --load-extension = auto-loads TabOrganizer every launch
-#   --app = opens manager directly in app-window mode (no tabs, no address bar)
-#
-# Pros: zero manual setup, works from the first double-click.
-# Trade-off: organize/snapshot operates on tabs inside THIS Chrome window,
-#            not the user's daily Chrome.
+# Strategy:
+#   1. Launch Chrome with --user-data-dir + --load-extension + --app=loader.html
+#   2. loader.html shows a TabOrganizer splash, polls until extension's
+#      service worker is ready, then replaces location with the manager URL.
+#   3. Single Chrome window from start to finish, no flicker, no error page.
 
 $EXT_ID  = 'eanilmbkohdgpndehpbikchfpnaboloh'
 $DIST    = 'D:\Desktop\AI\MiniPrograms\TabOrganizer\dist'
+$LOADER  = 'D:\Desktop\AI\MiniPrograms\TabOrganizer\scripts\loader.html'
 $PROFILE = "$env:LOCALAPPDATA\TabOrganizer\ChromeProfile"
-$MGR     = "chrome-extension://$EXT_ID/src/manager/manager.html"
 
 # Find Chrome
 $chrome = $null
@@ -32,16 +29,18 @@ if (-not $chrome) {
     exit 1
 }
 
-# Ensure persistent profile dir exists
+# Persistent profile so data survives across launches
 if (-not (Test-Path $PROFILE)) {
     New-Item -ItemType Directory -Path $PROFILE -Force | Out-Null
 }
 
-# Launch: dedicated profile + auto-load extension + open manager in app mode
+# Convert local loader path to file:// URL
+$loaderUri = (New-Object System.Uri($LOADER)).AbsoluteUri
+
 Start-Process $chrome @(
     "--user-data-dir=`"$PROFILE`"",
     "--load-extension=`"$DIST`"",
     '--no-first-run',
     '--no-default-browser-check',
-    "--app=`"$MGR`""
+    "--app=`"$loaderUri`""
 )
