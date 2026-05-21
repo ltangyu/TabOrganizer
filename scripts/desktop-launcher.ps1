@@ -1,24 +1,18 @@
-# TabOrganizer desktop launcher -- two-step launch
+# TabOrganizer desktop launcher
 #
-# Strategy:
-#   1. First chrome.exe call: starts Chrome with --user-data-dir and
-#      --load-extension. Chrome opens its default new-tab window
-#      (about:blank to keep it minimal). Extension registers in this
-#      Chrome instance.
-#   2. Wait 3 seconds for extension's service worker to be ready.
-#   3. Second chrome.exe call: --app=chrome-extension://[id]/manager.html
-#      Because --user-data-dir is identical, this attaches to the same
-#      Chrome instance and opens a new --app window (no tabs, no address
-#      bar).
-#   4. Optional: send Ctrl+W to the initial about:blank tab to close it.
+# Pre-requisite: extension must be permanently installed in the user's
+# daily Chrome (one-time setup via chrome://extensions -> Load unpacked).
+# Since Chrome 137+ restricts --load-extension command-line flag,
+# permanent installation is the only reliable way.
 #
-# This approach avoids the race between Chrome resolving the --app URL
-# and --load-extension finishing registration.
+# After install (extension ID is fixed via manifest "key" field), this
+# launcher just opens chrome.exe --app=chrome-extension://[id]/... so
+# the manager appears as a standalone app window in the user's daily
+# Chrome -- no separate profile, no extension reloading.
 
-$EXT_ID  = 'eanilmbkohdgpndehpbikchfpnaboloh'
-$DIST    = 'D:\Desktop\AI\MiniPrograms\TabOrganizer\dist'
-$PROFILE = "$env:LOCALAPPDATA\TabOrganizer\ChromeProfile"
-$MGR     = "chrome-extension://$EXT_ID/src/manager/manager.html"
+$EXT_ID = 'eanilmbkohdgpndehpbikchfpnaboloh'
+$MGR    = "chrome-extension://$EXT_ID/src/manager/manager.html"
+$DIST   = 'D:\Desktop\AI\MiniPrograms\TabOrganizer\dist'
 
 # Find Chrome
 $chrome = $null
@@ -38,37 +32,45 @@ if (-not $chrome) {
     exit 1
 }
 
-# Persistent profile dir
-if (-not (Test-Path $PROFILE)) {
-    New-Item -ItemType Directory -Path $PROFILE -Force | Out-Null
+# Check if extension is installed in user's default Chrome profile
+$prefPath = "$env:LOCALAPPDATA\Google\Chrome\User Data\Default\Preferences"
+$installed = $false
+if (Test-Path $prefPath) {
+    try {
+        $json = Get-Content $prefPath -Raw -Encoding UTF8
+        $installed = $json -match [Regex]::Escape("`"$EXT_ID`"")
+    } catch {}
 }
 
-# Detect if a Chrome instance using this profile is already running.
-# If so, don't restart it; just open the app window directly.
-$alreadyRunning = $false
-$profileLockFile = Join-Path $PROFILE 'SingletonLock'
-if (Test-Path $profileLockFile) {
-    $alreadyRunning = $true
+if ($installed) {
+    # Open manager as app window
+    Start-Process $chrome "--app=`"$MGR`""
+    exit 0
 }
 
-if (-not $alreadyRunning) {
-    # Step 1: launch Chrome to register the extension
-    Start-Process $chrome @(
-        "--user-data-dir=`"$PROFILE`"",
-        "--load-extension=`"$DIST`"",
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--window-size=400,300',
-        'about:blank'
-    )
-    # Step 2: wait for service worker registration
-    Start-Sleep -Seconds 3
-}
+# Not installed -- show one-time setup instructions
+Add-Type -AssemblyName PresentationFramework
+Start-Process $chrome 'chrome://extensions/'
+Start-Sleep -Milliseconds 500
+explorer $DIST
 
-# Step 3: open manager URL in --app mode (no tabs, no address bar).
-# Same user-data-dir means this attaches to the existing Chrome instance
-# and opens a new window inside it.
-Start-Process $chrome @(
-    "--user-data-dir=`"$PROFILE`"",
-    "--app=`"$MGR`""
-)
+$msg = @"
+First-time setup (only needed ONCE):
+
+1. In chrome://extensions, enable "Developer mode" (top-right).
+2. Drag the dist folder onto the extensions page.
+   (Or click "Load unpacked" and select dist.)
+3. Confirm the extension ID matches:
+       $EXT_ID
+4. Close this dialog. Double-click TabOrganizer again -- the
+   manager will open directly in app-window mode.
+
+Why one-time install:
+Chrome 137+ disables the --load-extension command-line flag for
+security. Permanent installation via chrome://extensions is the
+only reliable way to keep an unpacked extension across launches.
+"@
+
+[System.Windows.MessageBox]::Show(
+    $msg, 'TabOrganizer first-time setup', 'OK', 'Information'
+) | Out-Null
