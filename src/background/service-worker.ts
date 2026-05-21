@@ -50,19 +50,33 @@ async function clearStaleOrganizeFlag(): Promise<void> {
   }
 }
 
+/**
+ * 強制重設 flag — 用在「明確無 organize 在跑」的時機點：
+ * - onStartup（Chrome 重啟）
+ * - onInstalled（extension 安裝 / reload）
+ * - organize/reset 訊息（UI 手動觸發）
+ * 這時若 flag 仍為 true，必定是上次 worker 中途死掉沒清。
+ * setSettings 寫入後 chrome.storage.onChanged 會自動 fire，UI 反應式更新。
+ */
+async function forceResetOrganizeFlag(): Promise<void> {
+  await setSettings({ organizeInProgress: false, organizeStartedAt: 0 });
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   const cats = await listCategories();
   if (cats.length === 0) {
     // 內建一個「收件匣」分類，name 用繁中作為 fallback，但實際顯示走 builtinKey i18n
     await createCategory('收件匣', '#9c9c9c', 'category.builtin.inbox');
   }
-  await clearStaleOrganizeFlag();
+  // extension 剛 install/update/reload，必定沒在 organize → 無條件清 flag
+  await forceResetOrganizeFlag();
   const settings = await getSettings();
   await ensureAlarmConfigured(settings.revalidateIntervalMinutes);
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  await clearStaleOrganizeFlag();
+  // Chrome 剛啟動，必定沒在 organize → 無條件清 flag
+  await forceResetOrganizeFlag();
   const settings = await getSettings();
   await ensureAlarmConfigured(settings.revalidateIntervalMinutes);
 });
@@ -211,6 +225,11 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage, _sender, sendResponse
   (async () => {
     if (msg.type === 'organize/start') {
       organizeAll();
+      sendResponse({ ok: true });
+      return;
+    }
+    if (msg.type === 'organize/reset') {
+      await forceResetOrganizeFlag();
       sendResponse({ ok: true });
       return;
     }

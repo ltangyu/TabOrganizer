@@ -9,6 +9,8 @@
   "header.control": "Kontrollpanel",
   "header.organize": "Alle Tabs organisieren",
   "header.organize.busy": "Organisiert…",
+  "header.organize.resetHint": "Hängt? Rechtsklick zum Zurücksetzen",
+  "header.organize.resetConfirm": "Status 'Organisieren' erzwungen zurücksetzen?",
   "category.all": "Alle",
   "category.uncategorized": "Unkategorisiert",
   "category.reopen": "Alle erneut öffnen",

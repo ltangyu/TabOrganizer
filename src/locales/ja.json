@@ -9,6 +9,8 @@
   "header.control": "コントロールパネル",
   "header.organize": "すべてのタブを整理",
   "header.organize.busy": "整理中…",
+  "header.organize.resetHint": "停止しましたか？右クリックでリセット",
+  "header.organize.resetConfirm": "「整理中」状態を強制リセットしますか？",
   "category.all": "すべて",
   "category.uncategorized": "未分類",
   "category.reopen": "すべて再開",

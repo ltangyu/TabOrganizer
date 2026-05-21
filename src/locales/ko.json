@@ -9,6 +9,8 @@
   "header.control": "제어판",
   "header.organize": "모든 탭 정리",
   "header.organize.busy": "정리 중…",
+  "header.organize.resetHint": "멈췄나요? 우클릭으로 재설정",
+  "header.organize.resetConfirm": "'정리 중' 상태를 강제 재설정하시겠습니까?",
   "category.all": "전체",
   "category.uncategorized": "미분류",
   "category.reopen": "모두 다시 열기",

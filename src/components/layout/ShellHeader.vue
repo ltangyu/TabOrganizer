@@ -3,6 +3,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { useArchiveStore } from '@/stores/archive';
 import { useSettingsStore } from '@/stores/settings';
 import { useI18n } from '@/composables/i18n';
+import type { RuntimeMessage } from '@/types/messages';
 
 const archive = useArchiveStore();
 const settings = useSettingsStore();
@@ -14,6 +15,14 @@ const emit = defineEmits<{
   'open-excluded': [];
   'open-control': [];
 }>();
+
+/** 右鍵點擊「整理中…」按鈕：強制重設 flag（解決 service worker 中途死掉導致卡住） */
+async function forceResetOrganize(e: MouseEvent): Promise<void> {
+  e.preventDefault();
+  if (!settings.organizeInProgress) return;
+  if (!confirm(t('header.organize.resetConfirm'))) return;
+  await chrome.runtime.sendMessage({ type: 'organize/reset' } satisfies RuntimeMessage);
+}
 
 defineProps<{ readyCount: number }>();
 
@@ -82,7 +91,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKey));
       <button
         class="btn btn-primary"
         :disabled="settings.organizeInProgress"
+        :title="settings.organizeInProgress ? t('header.organize.resetHint') : ''"
         @click="emit('organize')"
+        @contextmenu="forceResetOrganize"
       >
         {{ settings.organizeInProgress ? t('header.organize.busy') : t('header.organize') }}
       </button>

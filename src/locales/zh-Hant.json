@@ -9,6 +9,8 @@
   "header.control": "控制面板",
   "header.organize": "一鍵整理所有分頁",
   "header.organize.busy": "整理中…",
+  "header.organize.resetHint": "卡住？右鍵點此重設",
+  "header.organize.resetConfirm": "強制重設「整理中」狀態？\n（僅在確認上次整理已中斷時使用）",
   "category.all": "全部",
   "category.uncategorized": "未分類",
   "category.reopen": "重新開啟",

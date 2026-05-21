@@ -9,6 +9,8 @@
   "header.control": "控制面板",
   "header.organize": "一键整理所有标签页",
   "header.organize.busy": "整理中…",
+  "header.organize.resetHint": "卡住？右键点此重置",
+  "header.organize.resetConfirm": "强制重置「整理中」状态？\n（仅在确认上次整理已中断时使用）",
   "category.all": "全部",
   "category.uncategorized": "未分类",
   "category.reopen": "重新打开",

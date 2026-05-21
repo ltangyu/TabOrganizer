@@ -9,6 +9,8 @@
   "header.control": "Panel de control",
   "header.organize": "Organizar todas las pestañas",
   "header.organize.busy": "Organizando…",
+  "header.organize.resetHint": "¿Atascado? Clic derecho para reiniciar",
+  "header.organize.resetConfirm": "¿Forzar el reinicio del estado 'organizando'?",
   "category.all": "Todo",
   "category.uncategorized": "Sin categoría",
   "category.reopen": "Reabrir todo",

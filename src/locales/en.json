@@ -9,6 +9,8 @@
   "header.control": "Control Panel",
   "header.organize": "Organize all tabs",
   "header.organize.busy": "Organizing…",
+  "header.organize.resetHint": "Stuck? Right-click to reset",
+  "header.organize.resetConfirm": "Force reset the 'organizing' state?\n(Only use if the previous organize was interrupted)",
   "category.all": "All",
   "category.uncategorized": "Uncategorized",
   "category.reopen": "Reopen all",

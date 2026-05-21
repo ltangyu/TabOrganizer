@@ -9,6 +9,8 @@
   "header.control": "Bảng điều khiển",
   "header.organize": "Sắp xếp tất cả tab",
   "header.organize.busy": "Đang sắp xếp…",
+  "header.organize.resetHint": "Bị treo? Chuột phải để đặt lại",
+  "header.organize.resetConfirm": "Cưỡng chế đặt lại trạng thái 'đang sắp xếp'?",
   "category.all": "Tất cả",
   "category.uncategorized": "Chưa phân loại",
   "category.reopen": "Mở lại tất cả",

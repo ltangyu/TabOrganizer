@@ -9,6 +9,8 @@
   "header.control": "Panneau de contrôle",
   "header.organize": "Organiser tous les onglets",
   "header.organize.busy": "Organisation…",
+  "header.organize.resetHint": "Bloqué ? Clic droit pour réinitialiser",
+  "header.organize.resetConfirm": "Forcer la réinitialisation de l'état 'organisation' ?",
   "category.all": "Tout",
   "category.uncategorized": "Sans catégorie",
   "category.reopen": "Tout rouvrir",

@@ -5,6 +5,7 @@ export type RuntimeMessage =
   | { type: 'organize/progress'; current: number; total: number; stage: ProgressStage; currentTitle?: string }
   | { type: 'organize/done'; summary: OrganizeSummary }
   | { type: 'organize/error'; error: string; i18nKey?: string }
+  | { type: 'organize/reset' }
   | { type: 'scan/request' }
   | { type: 'scan/response'; candidates: TabCandidate[]; total: number; suggested: number; unassigned: number }
   | { type: 'manager/open' }

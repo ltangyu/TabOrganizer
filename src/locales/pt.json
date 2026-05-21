@@ -9,6 +9,8 @@
   "header.control": "Painel de controle",
   "header.organize": "Organizar todas as abas",
   "header.organize.busy": "Organizando…",
+  "header.organize.resetHint": "Travado? Clique direito para reiniciar",
+  "header.organize.resetConfirm": "Forçar reinicialização do estado 'organizando'?",
   "category.all": "Tudo",
   "category.uncategorized": "Sem categoria",
   "category.reopen": "Reabrir tudo",
