@@ -1,6 +1,6 @@
 {
   "name": "tab-organizer",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "Chrome MV3 擴充功能：分類分頁、HEAD 檢查 404、截圖保留 URL、關閉分頁釋放記憶體",
