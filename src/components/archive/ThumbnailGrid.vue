@@ -7,7 +7,7 @@ import { formatRelative } from '@/utils/time';
 import ThumbnailCard from './ThumbnailCard.vue';
 import { computed } from 'vue';
 
-import { ref, onBeforeUnmount, onMounted, watch, nextTick } from 'vue';
+import { ref, onBeforeUnmount, onMounted } from 'vue';
 
 const props = defineProps<{ items: ArchivedTab[]; mode: 'grid' | 'list' }>();
 const emit = defineEmits<{
@@ -27,38 +27,32 @@ const gridStyle = computed(() => ({
   '--card-gap': `${tweaks.gap}px`,
 }));
 
-// 回到最上面按鈕：scroll > 400px 顯示
-const gridContainer = ref<HTMLElement | null>(null);
-const listContainer = ref<HTMLElement | null>(null);
+// 回到最上面按鈕：scroll > 400px 顯示。
+// 注意：manager 的 layout（.app min-height:100vh + .archive-main flex:1 auto）
+// 讓內容超過視窗高度時是 window/body 在 scroll，不是 .thumb-grid。
+// 所以監聽 window.scroll、用 window.scrollTo 回頂。
 const showScrollTop = ref(false);
 const SCROLL_THRESHOLD = 400;
 
-function activeScrollEl(): HTMLElement | null {
-  return isGrid.value ? gridContainer.value : listContainer.value;
-}
-
-function handleScroll(): void {
-  const el = activeScrollEl();
-  if (!el) return;
-  showScrollTop.value = el.scrollTop > SCROLL_THRESHOLD;
+function handleWindowScroll(): void {
+  // 同時偵測 documentElement 跟 window.scrollY，兼容不同瀏覽器/layout
+  const sy = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+  showScrollTop.value = sy > SCROLL_THRESHOLD;
 }
 
 function scrollToTop(): void {
-  const el = activeScrollEl();
-  el?.scrollTo({ top: 0, behavior: 'smooth' });
+  // 平滑 scroll 回頂；同時對 documentElement 跟 body 操作以兼容
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
 }
 
-// 切換 grid/list mode 時，舊容器的 scroll listener 隨 v-if 銷毀自動斷開；
-// 重設按鈕狀態為隱藏，等新容器 mounted 後重新判斷 scrollTop。
-watch(isGrid, async () => {
-  showScrollTop.value = false;
-  await nextTick();
-  handleScroll();
+onMounted(() => {
+  window.addEventListener('scroll', handleWindowScroll, { passive: true });
+  handleWindowScroll();
 });
-
-onMounted(() => handleScroll());
 onBeforeUnmount(() => {
-  showScrollTop.value = false;
+  window.removeEventListener('scroll', handleWindowScroll);
 });
 </script>
 
@@ -69,10 +63,8 @@ onBeforeUnmount(() => {
   </div>
   <div
     v-else-if="isGrid"
-    ref="gridContainer"
     class="thumb-grid scroll-y"
     :style="gridStyle"
-    @scroll.passive="handleScroll"
   >
     <ThumbnailCard
       v-for="item in items"
@@ -86,9 +78,7 @@ onBeforeUnmount(() => {
   </div>
   <div
     v-else
-    ref="listContainer"
     class="list-wrap scroll-y"
-    @scroll.passive="handleScroll"
   >
     <table class="list-table">
       <thead>
