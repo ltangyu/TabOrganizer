@@ -10,7 +10,6 @@ const { t } = useI18n();
 
 const emit = defineEmits<{
   'manage-categories': [];
-  'reopen-category': [id: number];
 }>();
 
 const counts = computed(() => {
@@ -61,58 +60,31 @@ function isActive(id: number | null | 'all'): boolean {
     </button>
 
     <!--
-      之前：cat-reopen 是 cat-chip <button> 內的 <span>，@click.stop 無效因為
-      HTML 規範下 button 把整塊視為單一可點區，內層 span 的 click handler
-      不被瀏覽器一致認可 → 永遠觸發外層 button 的 select() 切換過濾。
-      改：chip 跟 reopen-btn 並排成兄弟元素，用 wrapper 偵測 hover 切換顯示。
-
-      排序：一般分類（user/auto）依數量多到少在前；
-      內建（收件匣）+ 未分類 一起排在最後面。
+      點 chip = 篩選 manager 的縮圖網格（不再有 hover「重新開啟」變成瀏覽器分頁的副作用）。
+      排序：一般分類（user/auto）依數量多到少在前；內建（收件匣）+ 未分類 一起排最後。
     -->
-    <div
+    <button
       v-for="c in regularCategories"
       :key="c.id"
-      class="cat-chip-wrap"
+      class="cat-chip"
+      :class="{ active: isActive(c.id ?? null) }"
+      @click="select(c.id ?? null)"
     >
-      <button
-        class="cat-chip"
-        :class="{ active: isActive(c.id ?? null) }"
-        @click="select(c.id ?? null)"
-      >
-        <span class="cat-name">{{ categories.displayName(c) }}</span>
-        <span class="cat-count text-mono">{{ counts.get(c.id ?? -1) ?? 0 }}</span>
-      </button>
-      <button
-        v-if="(counts.get(c.id ?? -1) ?? 0) > 0 && !isActive(c.id ?? null)"
-        class="cat-reopen-btn"
-        @click="c.id != null && emit('reopen-category', c.id)"
-      >
-        {{ t('category.reopen') }}
-      </button>
-    </div>
+      <span class="cat-name">{{ categories.displayName(c) }}</span>
+      <span class="cat-count text-mono">{{ counts.get(c.id ?? -1) ?? 0 }}</span>
+    </button>
 
     <!-- 內建分類（收件匣 等）— 跟「未分類」一樣排最後 -->
-    <div
+    <button
       v-for="c in builtinCategories"
       :key="c.id"
-      class="cat-chip-wrap"
+      class="cat-chip"
+      :class="{ active: isActive(c.id ?? null) }"
+      @click="select(c.id ?? null)"
     >
-      <button
-        class="cat-chip"
-        :class="{ active: isActive(c.id ?? null) }"
-        @click="select(c.id ?? null)"
-      >
-        <span class="cat-name">{{ categories.displayName(c) }}</span>
-        <span class="cat-count text-mono">{{ counts.get(c.id ?? -1) ?? 0 }}</span>
-      </button>
-      <button
-        v-if="(counts.get(c.id ?? -1) ?? 0) > 0 && !isActive(c.id ?? null)"
-        class="cat-reopen-btn"
-        @click="c.id != null && emit('reopen-category', c.id)"
-      >
-        {{ t('category.reopen') }}
-      </button>
-    </div>
+      <span class="cat-name">{{ categories.displayName(c) }}</span>
+      <span class="cat-count text-mono">{{ counts.get(c.id ?? -1) ?? 0 }}</span>
+    </button>
 
     <button
       class="cat-chip"
@@ -181,39 +153,6 @@ function isActive(id: number | null | 'all'): boolean {
   font-weight: 500;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-}
-
-/* chip + reopen-btn 並排為兄弟元素的 wrapper */
-.cat-chip-wrap {
-  position: relative;
-  display: inline-flex;
-  flex-shrink: 0;
-}
-.cat-chip-wrap .cat-chip {
-  width: 100%;
-}
-.cat-reopen-btn {
-  appearance: none;
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  background: var(--text-primary);
-  color: var(--text-on-dark);
-  border: 0.5px solid var(--text-primary);
-  border-radius: var(--radius);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  padding: 0;
-  white-space: nowrap;
-}
-.cat-chip-wrap:hover .cat-reopen-btn {
-  display: flex;
 }
 
 .cat-strip-end {

@@ -19,6 +19,7 @@ import { useUiPrefsStore } from '@/stores/ui-prefs';
 import { useI18n } from '@/composables/i18n';
 import { searchArchives } from '@/modules/search-engine';
 import { openOrFocusTab } from '@/modules/tab-opener';
+import { dedupeArchives } from '@/modules/archive-store';
 import type { ArchivedTab } from '@/types/archive';
 import type { RuntimeMessage } from '@/types/messages';
 
@@ -68,30 +69,11 @@ async function pickCategory(id: number | null): Promise<void> {
   pickerItem.value = null;
 }
 
-async function reopenCategory(categoryId: number): Promise<void> {
-  console.log('[TabOrganizer] manager.reopenCategory clicked, id=', categoryId);
-  const resp = (await chrome.runtime.sendMessage({
-    type: 'reopen/category',
-    categoryId,
-  } satisfies RuntimeMessage)) as
-    | { ok: boolean; opened?: number; skipped?: number }
-    | undefined;
-  console.log('[TabOrganizer] manager.reopenCategory response', resp);
-  if (resp && resp.ok && resp.opened !== undefined) {
-    reopenToast.value = {
-      opened: resp.opened,
-      skipped: resp.skipped ?? 0,
-      at: Date.now(),
-    };
-    setTimeout(() => {
-      if (reopenToast.value && Date.now() - reopenToast.value.at >= 4000) {
-        reopenToast.value = null;
-      }
-    }, 4500);
-  }
-}
-
-const reopenToast = ref<{ opened: number; skipped: number; at: number } | null>(null);
+// 註：reopenCategory（hover「重新開啟」把整個分類所有歸檔重新開成 tab）
+// 已移除 — 使用者要的是「點分類 = 篩選 manager 縮圖」單純動作，
+// 不要副作用開瀏覽器分頁。
+// SW message handler 'reopen/category' 仍保留（萬一未來想再做），
+// 但 UI 不再呼叫它。
 
 let detach: (() => void) | null = null;
 
@@ -124,6 +106,16 @@ onMounted(async () => {
   await prefs.load();
   await settings.load();
   await categories.refresh();
+  // 一次性去重：清掉舊版本累積的「同 URL 多筆」歸檔，只留最新
+  // （正常情況下 upsertArchivedTab 會避免新增，但既存資料需要這一次清理）
+  try {
+    const removed = await dedupeArchives();
+    if (removed > 0) {
+      console.log('[TabOrganizer] dedupeArchives removed', removed, 'duplicate archives');
+    }
+  } catch (e) {
+    console.warn('[TabOrganizer] dedupeArchives failed', e);
+  }
   await archive.refresh();
   detach = progress.attachListener();
   chrome.runtime.onMessage.addListener(messageHandler);
@@ -149,7 +141,6 @@ onBeforeUnmount(() => {
     />
     <CategoryStrip
       @manage-categories="showCategoryEditor = true"
-      @reopen-category="reopenCategory"
     />
     <ArchiveFilters />
 
@@ -190,15 +181,6 @@ onBeforeUnmount(() => {
           {{ t('toast.revalidate.format', lastRevalidate) }}
         </span>
         <button class="btn-ghost-x" @click="lastRevalidate = null" :aria-label="t('modal.close')">×</button>
-      </div>
-    </Transition>
-    <Transition name="toast">
-      <div v-if="reopenToast" class="revalidate-toast glass-box">
-        <span class="label-micro">{{ t('toast.reopen.done') }}</span>
-        <span class="text-mono">
-          {{ t('toast.reopen.format', { opened: reopenToast.opened, skipped: reopenToast.skipped }) }}
-        </span>
-        <button class="btn-ghost-x" @click="reopenToast = null" :aria-label="t('modal.close')">×</button>
       </div>
     </Transition>
   </div>

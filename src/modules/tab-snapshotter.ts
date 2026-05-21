@@ -3,7 +3,7 @@ import type { ProgressStage } from '@/types/messages';
 import { sleep } from '@/utils/time';
 import { resizeToThumb } from '@/utils/image';
 import { slugifyForFilename } from '@/utils/domain';
-import { addArchivedTab } from './archive-store';
+import { upsertArchivedTab } from './archive-store';
 import { captureFullPage } from './full-page-capture';
 
 /**
@@ -195,7 +195,9 @@ export async function snapshotTabs(
         archivedAt: Date.now(),
         status: 'ok',
       };
-      await addArchivedTab(record);
+      // upsert：同 URL 已有歸檔就先刪掉舊的、再加新的 →
+      // 縮圖網格不會出現同 URL 重複卡片
+      await upsertArchivedTab(record);
       archived++;
       archivedTabIds.push(t.tabId);
 

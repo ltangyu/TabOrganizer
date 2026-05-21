@@ -6,6 +6,7 @@ import type {
   ExcludedRecord,
   ScanHistory,
 } from '@/types/archive';
+import { normalizeUrl } from '@/utils/url';
 
 class TabOrganizerDB extends Dexie {
   archives!: Table<ArchivedTab, number>;
@@ -68,6 +69,49 @@ export async function deleteDomainRule(id: number): Promise<void> {
 
 export async function addArchivedTab(tab: ArchivedTab): Promise<number> {
   return (await db.archives.add(tab)) as number;
+}
+
+/**
+ * 加入歸檔但「保證 URL 唯一」— 若 archives 表已有相同（標準化）URL 的紀錄，
+ * 先刪掉舊的再插入新的。
+ * 這樣縮圖網格不會出現同 URL 的多張卡片（最新一次截圖取代舊的）。
+ */
+export async function upsertArchivedTab(tab: ArchivedTab): Promise<number> {
+  const norm = normalizeUrl(tab.url);
+  const all = await db.archives.toArray();
+  const olderIds: number[] = [];
+  for (const a of all) {
+    if (a.id != null && normalizeUrl(a.url) === norm) {
+      olderIds.push(a.id);
+    }
+  }
+  if (olderIds.length > 0) {
+    await db.archives.bulkDelete(olderIds);
+  }
+  return (await db.archives.add(tab)) as number;
+}
+
+/**
+ * 對 archives 表做一次性 dedup：同 URL 多筆 → 只留最新的。
+ * 回傳被刪除的筆數。
+ */
+export async function dedupeArchives(): Promise<number> {
+  const all = await db.archives.orderBy('archivedAt').reverse().toArray();
+  const seen = new Set<string>();
+  const idsToDelete: number[] = [];
+  for (const a of all) {
+    if (a.id == null) continue;
+    const norm = normalizeUrl(a.url);
+    if (seen.has(norm)) {
+      idsToDelete.push(a.id); // 同 URL 較舊那筆
+    } else {
+      seen.add(norm);
+    }
+  }
+  if (idsToDelete.length > 0) {
+    await db.archives.bulkDelete(idsToDelete);
+  }
+  return idsToDelete.length;
 }
 
 export async function listArchives(opts?: {
