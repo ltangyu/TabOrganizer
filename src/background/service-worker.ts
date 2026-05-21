@@ -4,7 +4,13 @@ import { scanAllTabs } from '@/modules/tab-scanner';
 import { checkBatch } from '@/modules/link-checker';
 import { snapshotTabs } from '@/modules/tab-snapshotter';
 import { closeTabs } from '@/modules/tab-closer';
-import { addExcluded, listCategories, createCategory, db } from '@/modules/archive-store';
+import {
+  addExcluded,
+  listCategories,
+  createCategory,
+  db,
+  dedupeArchives,
+} from '@/modules/archive-store';
 import { backfillUncategorized, loadCategoryState } from '@/modules/category-engine';
 import { findMissingTabs, reopenMissingTabs, saveOrganizeScanSnapshot } from '@/modules/recovery';
 import { openTabsSkipDuplicates } from '@/modules/tab-opener';
@@ -75,6 +81,16 @@ chrome.runtime.onInstalled.addListener(async () => {
   }
   // extension 剛 install/update/reload，必定沒在 organize → 無條件清 flag
   await forceResetOrganizeFlag();
+  // 每次 reload 都跑一次去重，不依賴 manager 是否重開
+  try {
+    const removed = await dedupeArchives();
+    if (removed > 0) {
+      console.log('[TabOrganizer] onInstalled dedupeArchives removed', removed);
+      broadcast({ type: 'archive/changed' });
+    }
+  } catch (e) {
+    console.warn('[TabOrganizer] onInstalled dedupe failed', e);
+  }
   const settings = await getSettings();
   await ensureAlarmConfigured(settings.revalidateIntervalMinutes);
 });
@@ -82,6 +98,16 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.runtime.onStartup.addListener(async () => {
   // Chrome 剛啟動，必定沒在 organize → 無條件清 flag
   await forceResetOrganizeFlag();
+  // 也跑一次去重（雖然通常 onInstalled 已處理，多一道保險）
+  try {
+    const removed = await dedupeArchives();
+    if (removed > 0) {
+      console.log('[TabOrganizer] onStartup dedupeArchives removed', removed);
+      broadcast({ type: 'archive/changed' });
+    }
+  } catch {
+    /* ignore */
+  }
   const settings = await getSettings();
   await ensureAlarmConfigured(settings.revalidateIntervalMinutes);
 });
