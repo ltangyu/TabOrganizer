@@ -162,6 +162,31 @@ async function runRevalidateNow(): Promise<void> {
   }
 }
 
+// 立即去重 — 手動觸發 dedupeArchives，顯示移除多少筆
+const deduping = ref(false);
+const dedupeResult = ref<{ before: number; removed: number; after: number } | null>(null);
+
+async function runDedupeNow(): Promise<void> {
+  deduping.value = true;
+  dedupeResult.value = null;
+  try {
+    const { db, dedupeArchives } = await import('@/modules/archive-store');
+    const before = await db.archives.count();
+    const removed = await dedupeArchives();
+    const after = await db.archives.count();
+    dedupeResult.value = { before, removed, after };
+    console.log('[TabOrganizer] manual dedupe', { before, removed, after });
+    // Broadcast 讓 manager 重新整理顯示
+    try {
+      await chrome.runtime.sendMessage({ type: 'archive/changed' } satisfies RuntimeMessage);
+    } catch {
+      /* no receiver — fine */
+    }
+  } finally {
+    deduping.value = false;
+  }
+}
+
 // 排版 tab helpers
 function setDensity(v: typeof tweaks.density): void {
   tweaks.density = v;
@@ -265,6 +290,21 @@ function setBadgePlacement(v: typeof tweaks.badgePlacement): void {
               </button>
               <span v-if="revalidateResult" class="text-mono text-secondary revalidate-result">
                 {{ t('ctrl.revalidate.result', revalidateResult) }}
+              </span>
+            </div>
+          </div>
+
+          <div class="ctrl-field">
+            <div class="ctrl-field-lbl">
+              <span class="lbl">{{ t('ctrl.dedupe.label') }}</span>
+              <span class="hint">{{ t('ctrl.dedupe.hint') }}</span>
+            </div>
+            <div class="revalidate-row">
+              <button class="btn btn-sm" :disabled="deduping" @click="runDedupeNow">
+                {{ deduping ? t('ctrl.dedupe.busy') : t('ctrl.dedupe.now') }}
+              </button>
+              <span v-if="dedupeResult" class="text-mono text-secondary revalidate-result">
+                {{ t('ctrl.dedupe.result', dedupeResult) }}
               </span>
             </div>
           </div>
