@@ -5,6 +5,7 @@ import { checkBatch } from '@/modules/link-checker';
 import { snapshotTabs } from '@/modules/tab-snapshotter';
 import { closeTabs } from '@/modules/tab-closer';
 import { addExcluded, listCategories, createCategory } from '@/modules/archive-store';
+import { backfillUncategorized, loadCategoryState } from '@/modules/category-engine';
 import {
   ALARM_REVALIDATE,
   DEFAULT_INTERVAL_MIN,
@@ -249,7 +250,21 @@ async function organizeAll(): Promise<void> {
 
   try {
     broadcast({ type: 'organize/progress', current: 0, total: 0, stage: 'scanning' });
-    const scan = await scanAllTabs();
+    // autoCreateCategories: true → 對每個沒匹配規則的 domain 自動建立 category + rule
+    // 這樣 412 個 tab 會依 base domain 自動歸類，而非全部塞進「未分類」
+    const scan = await scanAllTabs({ autoCreateCategories: true });
+    // 回填：對舊有 categoryId == null 的 archive，用新建立的規則重新歸類
+    // （讓使用者之前 organize 但沒分類的紀錄也自動歸到對應分類）
+    try {
+      const state = await loadCategoryState(true);
+      const fixed = await backfillUncategorized(state);
+      if (fixed > 0) {
+        console.log('[TabOrganizer] backfilled', fixed, 'uncategorized archives');
+        broadcast({ type: 'archive/changed' });
+      }
+    } catch (e) {
+      console.warn('[TabOrganizer] backfill failed', e);
+    }
     if (scan.total === 0) {
       const summary: OrganizeSummary = {
         scanned: 0, checked: 0, snapshotted: 0, excluded: 0, closed: 0,
