@@ -14,6 +14,7 @@ const emit = defineEmits<{
   organize: [];
   'open-excluded': [];
   'open-control': [];
+  'open-recover': [];
 }>();
 
 /** 右鍵點擊「整理中…」按鈕：強制重設 flag（解決 service worker 中途死掉導致卡住） */
@@ -87,6 +88,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKey));
       <button class="btn" @click="emit('open-excluded')">
         {{ t('header.excluded') }} · {{ archive.excluded.length }}
       </button>
+      <button class="btn" @click="emit('open-recover')">{{ t('header.recover') }}</button>
       <button class="btn" @click="emit('open-control')">{{ t('header.control') }}</button>
       <button
         class="btn btn-primary"

@@ -1,4 +1,5 @@
 import type { TabCandidate } from './archive';
+import type { MissingTab } from '@/modules/recovery';
 
 export type RuntimeMessage =
   | { type: 'organize/start' }
@@ -12,7 +13,11 @@ export type RuntimeMessage =
   | { type: 'archive/changed' }
   | { type: 'revalidate/run' }
   | { type: 'revalidate/done'; checked: number; gone: number }
-  | { type: 'reopen/category'; categoryId: number };
+  | { type: 'reopen/category'; categoryId: number }
+  | { type: 'recover/scan'; historyHoursAgo?: number }
+  | { type: 'recover/scan-response'; missing: MissingTab[] }
+  | { type: 'recover/reopen'; urls: string[] }
+  | { type: 'recover/reopen-response'; opened: number };
 
 export type ProgressStage = 'scanning' | 'checking' | 'snapshotting' | 'closing' | 'done';
 

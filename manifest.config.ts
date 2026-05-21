@@ -11,7 +11,17 @@ export default defineManifest({
   // 在使用者首次手動「載入未封裝項目」後，ID 永久不變，
   // 桌面捷徑因此可硬寫 chrome-extension://[id]/...
   key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuxoGVziNeCSWHscFZc78WYNQsxAaCZekKihQMLC7rg9/UZQl2ZeMLMZfpR4KKMVo1tNnwu34swK/uH3CrToyjZ39k2pX2NJQwlNHx/+z4Wg+EL9tOJR2JSyntdvpVoOA5/C5ZUXCi/n1tn+hV9floloDQ/6n3i+vf969pHQ/BihfXTTaqkdqCDvQzfBShfxlagqlN2UneVkLz8F963Uosn9CPDiIV5aL1am8LHpGLMm83xewE3G3PLmq9QxM0tEx6wWdsX+4g9u6dLR/oVQfAERy/mXPyGYOiJQb18ZC8Ch7My9ZB6AYEgzutQfIg5tCr3Ps/Lh62SHe4gUwNTqVnwIDAQAB',
-  permissions: ['tabs', 'activeTab', 'downloads', 'storage', 'alarms', 'tabGroups', 'debugger'],
+  permissions: [
+    'tabs',
+    'activeTab',
+    'downloads',
+    'storage',
+    'alarms',
+    'tabGroups',
+    'debugger',
+    'sessions', // 抓 chrome.sessions.getRecentlyClosed 給「比對遺失分頁」用
+    'history',  // 用 chrome.history.search 比對遺失分頁（涵蓋 > sessions 上限的 25）
+  ],
   host_permissions: ['<all_urls>'],
   background: {
     service_worker: 'src/background/service-worker.ts',

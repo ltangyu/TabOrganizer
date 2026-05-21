@@ -6,6 +6,7 @@ import { snapshotTabs } from '@/modules/tab-snapshotter';
 import { closeTabs } from '@/modules/tab-closer';
 import { addExcluded, listCategories, createCategory } from '@/modules/archive-store';
 import { backfillUncategorized, loadCategoryState } from '@/modules/category-engine';
+import { findMissingTabs, reopenMissingTabs } from '@/modules/recovery';
 import {
   ALARM_REVALIDATE,
   DEFAULT_INTERVAL_MIN,
@@ -391,6 +392,18 @@ chrome.runtime.onMessage.addListener((msg: RuntimeMessage, _sender, sendResponse
     if (msg.type === 'reopen/category') {
       await reopenCategory(msg.categoryId);
       sendResponse({ ok: true });
+      return;
+    }
+    if (msg.type === 'recover/scan') {
+      const missing = await findMissingTabs({
+        ...(msg.historyHoursAgo !== undefined ? { historyHoursAgo: msg.historyHoursAgo } : {}),
+      });
+      sendResponse({ type: 'recover/scan-response', missing });
+      return;
+    }
+    if (msg.type === 'recover/reopen') {
+      const opened = await reopenMissingTabs(msg.urls);
+      sendResponse({ type: 'recover/reopen-response', opened });
       return;
     }
     sendResponse({ ok: false });

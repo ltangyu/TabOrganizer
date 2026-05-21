@@ -6,6 +6,7 @@ import ArchiveFilters from '@/components/archive/ArchiveFilters.vue';
 import ThumbnailGrid from '@/components/archive/ThumbnailGrid.vue';
 import SnapshotDetailModal from '@/components/archive/SnapshotDetailModal.vue';
 import ExcludedListPanel from '@/components/archive/ExcludedListPanel.vue';
+import RecoveryPanel from '@/components/archive/RecoveryPanel.vue';
 import CategoryEditor from '@/components/category/CategoryEditor.vue';
 import CategoryPicker from '@/components/category/CategoryPicker.vue';
 import OrganizeProgressOverlay from '@/components/progress/OrganizeProgressOverlay.vue';
@@ -32,6 +33,7 @@ const pickerItem = ref<ArchivedTab | null>(null);
 const showCategoryEditor = ref(false);
 const showExcluded = ref(false);
 const showControl = ref(false);
+const showRecover = ref(false);
 
 const filteredAndSearched = computed(() =>
   searchArchives(archive.filtered, categories.categories, archive.searchQuery),
@@ -78,6 +80,7 @@ function handleHash(): void {
   if (h === '#categories') showCategoryEditor.value = true;
   if (h === '#control' || h === '#settings' || h === '#popup') showControl.value = true;
   if (h === '#excluded') showExcluded.value = true;
+  if (h === '#recover') showRecover.value = true;
 }
 
 const lastRevalidate = ref<{ checked: number; gone: number; at: number } | null>(null);
@@ -122,6 +125,7 @@ onBeforeUnmount(() => {
       @organize="onOrganize"
       @open-excluded="showExcluded = true"
       @open-control="showControl = true"
+      @open-recover="showRecover = true"
     />
     <CategoryStrip
       @manage-categories="showCategoryEditor = true"
@@ -150,6 +154,7 @@ onBeforeUnmount(() => {
     <CategoryPicker :item="pickerItem" @close="pickerItem = null" @pick="pickCategory" />
     <CategoryEditor :open="showCategoryEditor" @close="showCategoryEditor = false" />
     <ExcludedListPanel :open="showExcluded" @close="showExcluded = false" />
+    <RecoveryPanel :open="showRecover" @close="showRecover = false" />
     <ControlPanel
       :open="showControl"
       @close="showControl = false"
