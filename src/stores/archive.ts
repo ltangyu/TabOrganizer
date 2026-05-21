@@ -10,6 +10,7 @@ import {
 } from '@/modules/archive-store';
 
 export type ViewMode = 'grid' | 'list';
+export type SortKey = 'time-desc' | 'time-asc' | 'title-asc' | 'title-desc';
 
 export const useArchiveStore = defineStore('archive', () => {
   const items = ref<ArchivedTab[]>([]);
@@ -24,6 +25,8 @@ export const useArchiveStore = defineStore('archive', () => {
   const filterDateTo = ref<number | null>(null);
   const searchQuery = ref<string>('');
   const viewMode = ref<ViewMode>('grid');
+  /** 排序：時間正反、標題正反；預設「最新在前」（time-desc） */
+  const sortBy = ref<SortKey>('time-desc');
 
   async function refresh(): Promise<void> {
     loading.value = true;
@@ -68,7 +71,29 @@ export const useArchiveStore = defineStore('archive', () => {
     if (filterDateTo.value != null) {
       list = list.filter((a) => a.archivedAt <= filterDateTo.value!);
     }
-    return list;
+    // 排序（不在原 array 上 mutate，因為 items 是 IDB pulled order = time-desc，
+    // 切換排序時必須回到完整重排）
+    const sorted = list.slice();
+    const titleCmp = (a: ArchivedTab, b: ArchivedTab): number =>
+      (a.title || '').localeCompare(b.title || '', undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    switch (sortBy.value) {
+      case 'time-desc':
+        sorted.sort((a, b) => b.archivedAt - a.archivedAt);
+        break;
+      case 'time-asc':
+        sorted.sort((a, b) => a.archivedAt - b.archivedAt);
+        break;
+      case 'title-asc':
+        sorted.sort(titleCmp);
+        break;
+      case 'title-desc':
+        sorted.sort((a, b) => -titleCmp(a, b));
+        break;
+    }
+    return sorted;
   });
 
   return {
@@ -83,6 +108,7 @@ export const useArchiveStore = defineStore('archive', () => {
     filterDateTo,
     searchQuery,
     viewMode,
+    sortBy,
     refresh,
     remove,
     recategorize,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { useArchiveStore } from '@/stores/archive';
+import { useArchiveStore, type SortKey } from '@/stores/archive';
 import { useI18n } from '@/composables/i18n';
 
 const archive = useArchiveStore();
@@ -8,6 +8,7 @@ const { t } = useI18n();
 
 const showDomain = ref(false);
 const showStatus = ref(false);
+const showSort = ref(false);
 
 const domainLabel = computed(() => archive.filterDomain || t('filter.all'));
 const statusLabel = computed(() =>
@@ -17,6 +18,14 @@ const statusLabel = computed(() =>
       ? t('filter.alive')
       : t('filter.gone'),
 );
+const sortLabel = computed(() => t(`sort.${archive.sortBy}`));
+
+const SORT_OPTIONS: SortKey[] = ['time-desc', 'time-asc', 'title-asc', 'title-desc'];
+
+function pickSort(s: SortKey): void {
+  archive.sortBy = s;
+  showSort.value = false;
+}
 
 const fromLabel = computed(() => formatDateShort(archive.filterDateFrom) || t('filter.any'));
 const toLabel = computed(() => formatDateShort(archive.filterDateTo) || t('filter.now'));
@@ -42,6 +51,7 @@ function reset(): void {
   archive.filterStatus = 'all';
   archive.filterDateFrom = null;
   archive.filterDateTo = null;
+  archive.sortBy = 'time-desc';
 }
 
 function pickDomain(d: string): void {
@@ -70,7 +80,7 @@ function onDate(which: 'from' | 'to', e: Event): void {
       <button
         class="filter-pill"
         :class="{ active: archive.filterDomain !== '' }"
-        @click="showDomain = !showDomain; showStatus = false"
+        @click="showDomain = !showDomain; showStatus = false; showSort = false"
       >
         <span class="lbl">{{ t('filter.domain') }}</span>
         <span class="val">{{ domainLabel }}</span>
@@ -93,7 +103,7 @@ function onDate(which: 'from' | 'to', e: Event): void {
       <button
         class="filter-pill"
         :class="{ active: archive.filterStatus !== 'all' }"
-        @click="showStatus = !showStatus; showDomain = false"
+        @click="showStatus = !showStatus; showDomain = false; showSort = false"
       >
         <span class="lbl">{{ t('filter.status') }}</span>
         <span class="val">{{ statusLabel }}</span>
@@ -103,6 +113,29 @@ function onDate(which: 'from' | 'to', e: Event): void {
         <button class="menu-item" @click="pickStatus('all')">{{ t('filter.all') }}</button>
         <button class="menu-item" @click="pickStatus('ok')">{{ t('filter.alive') }}</button>
         <button class="menu-item" @click="pickStatus('gone')">{{ t('filter.gone') }}</button>
+      </div>
+    </div>
+
+    <div class="pill-wrap">
+      <button
+        class="filter-pill"
+        :class="{ active: archive.sortBy !== 'time-desc' }"
+        @click="showSort = !showSort; showDomain = false; showStatus = false"
+      >
+        <span class="lbl">{{ t('filter.sort') }}</span>
+        <span class="val">{{ sortLabel }}</span>
+        <span class="caret">▼</span>
+      </button>
+      <div v-if="showSort" class="pill-menu">
+        <button
+          v-for="s in SORT_OPTIONS"
+          :key="s"
+          class="menu-item"
+          :class="{ 'menu-item-active': archive.sortBy === s }"
+          @click="pickSort(s)"
+        >
+          {{ t(`sort.${s}`) }}
+        </button>
       </div>
     </div>
 
@@ -187,6 +220,10 @@ function onDate(which: 'from' | 'to', e: Event): void {
 }
 .menu-item:hover {
   background: var(--bg-hover);
+}
+.menu-item-active {
+  background: var(--bg-active, var(--bg-surface));
+  font-weight: 600;
 }
 .hidden-date {
   position: absolute;
