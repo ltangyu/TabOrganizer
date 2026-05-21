@@ -44,12 +44,16 @@ async function checkOne(url: string, timeoutMs: number): Promise<CheckResult> {
   return head;
 }
 
+export type CheckProgressFn = (done: number, total: number, lastUrl?: string) => void;
+
 export async function checkBatch(
   urls: string[],
   { concurrency = 8, timeoutMs = 5000 }: CheckOptions = {},
+  onProgress?: CheckProgressFn,
 ): Promise<Map<string, CheckResult>> {
   const results = new Map<string, CheckResult>();
   let i = 0;
+  let done = 0;
 
   async function worker(): Promise<void> {
     while (i < urls.length) {
@@ -57,6 +61,8 @@ export async function checkBatch(
       const url = urls[idx]!;
       const r = await checkOne(url, timeoutMs);
       results.set(url, r);
+      done++;
+      onProgress?.(done, urls.length, url);
     }
   }
 

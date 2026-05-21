@@ -144,10 +144,20 @@ async function organizeAll(): Promise<void> {
       total: scan.total,
       stage: 'checking',
     });
-    const checkResults = await checkBatch(scan.candidates.map((c) => c.url), {
-      concurrency: 8,
-      timeoutMs: 5000,
-    });
+    const checkResults = await checkBatch(
+      scan.candidates.map((c) => c.url),
+      { concurrency: 8, timeoutMs: 5000 },
+      (done, total, lastUrl) => {
+        // 每完成一個 URL 廣播進度，讓 UI 看得到推進
+        broadcast({
+          type: 'organize/progress',
+          current: done,
+          total,
+          stage: 'checking',
+          ...(lastUrl ? { currentTitle: lastUrl } : {}),
+        });
+      },
+    );
 
     const alive = [] as typeof scan.candidates;
     const dead = [] as typeof scan.candidates;
